@@ -415,15 +415,15 @@ void Config::read(ConfigReadContext &context)
   for (const auto &screen : m_serverOptions.screens) {
     if (screen.name.empty())
       continue;
-    const auto &screenName = screen.name;
+    const auto &computerName = screen.name;
 
-    if (!isValidScreenName(screenName)) {
-      throw ServerConfigReadException(context, "invalid screen name \"%{1}\"", screenName);
+    if (!isValidScreenName(computerName)) {
+      throw ServerConfigReadException(context, "invalid computer name \"%{1}\"", computerName);
     }
 
     // add the screen to the configuration
-    if (!tmp.addScreen(screenName)) {
-      throw ServerConfigReadException(context, "duplicate screen name \"%{1}\"", screenName);
+    if (!tmp.addScreen(computerName)) {
+      throw ServerConfigReadException(context, "duplicate computer name \"%{1}\"", computerName);
     }
   }
   while (context.getStream()) {
@@ -623,13 +623,13 @@ void Config::readSectionLinks(ConfigReadContext &s)
 
       // verify we know about the screen
       if (!isScreen(screen)) {
-        throw ServerConfigReadException(s, "unknown screen name \"%{1}\"", screen);
+        throw ServerConfigReadException(s, "unknown computer name \"%{1}\"", screen);
       }
       if (!isCanonicalName(screen)) {
-        throw ServerConfigReadException(s, "cannot use screen name alias here");
+        throw ServerConfigReadException(s, "cannot use computer name alias here");
       }
     } else if (screen.empty()) {
-      throw ServerConfigReadException(s, "argument before first screen");
+      throw ServerConfigReadException(s, "argument before first computer");
     } else {
       // parse argument:  `<name>[(<s0>,<e0>)]=<value>[(<s1>,<e1>)]'
       // the stuff in brackets is optional.  interval values must be
@@ -652,7 +652,7 @@ void Config::readSectionLinks(ConfigReadContext &s)
         throw ServerConfigReadException(s, "unknown side \"%{1}\" in link", side);
       }
       if (!isScreen(dstScreen)) {
-        throw ServerConfigReadException(s, "unknown screen name \"%{1}\"", dstScreen);
+        throw ServerConfigReadException(s, "unknown computer name \"%{1}\"", dstScreen);
       }
       if (!connect(
               screen, dir, srcInterval.first, srcInterval.second, dstScreen, dstInterval.first, dstInterval.second
@@ -703,14 +703,14 @@ Config::parseCondition(const ConfigReadContext &s, const std::string &name, cons
 
   if (name == "connect") {
     if (args.size() != 1) {
-      throw ServerConfigReadException(s, "syntax for condition: connect([screen])");
+      throw ServerConfigReadException(s, "syntax for condition: connect([computer])");
     }
 
     std::string screen = args[0];
     if (isScreen(screen)) {
       screen = getCanonicalName(screen);
     } else if (!screen.empty()) {
-      throw ServerConfigReadException(s, "unknown screen name \"%{1}\" in connect", screen);
+      throw ServerConfigReadException(s, "unknown computer name \"%{1}\" in connect", screen);
     }
 
     return std::make_unique<InputFilter::ScreenConnectedCondition>(m_events, screen);
@@ -907,7 +907,7 @@ void Config::parseScreens(const ConfigReadContext &c, const std::string_view &s,
     } else if (!rawName.empty()) {
       std::string name = getCanonicalName(rawName);
       if (name.empty()) {
-        throw ServerConfigReadException(c, "unknown screen name \"%{1}\"", rawName);
+        throw ServerConfigReadException(c, "unknown computer name \"%{1}\"", rawName);
       }
       screens.insert(name);
     }

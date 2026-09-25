@@ -966,7 +966,7 @@ void EiScreen::handlePortalSessionClosed()
 {
   // Portal may or may not EI_EVENT_DISCONNECT us before sending the DBus Closed
   // signal. Let's clean up either way.
-  LOG_DEBUG("eis screen handling portal session closed");
+  LOG_DEBUG("eis handling portal session closed");
   cleanupEi();
   initEi();
 }
