@@ -1358,7 +1358,7 @@ void LanSessionTests::simpleView_adoptedClientHasNoWatchdog()
 void LanSessionTests::screenQueue_holdsClientsWhileEditing()
 {
   ClientScreenQueue queue;
-  ScreenList layout;
+  ComputerList layout;
 
   // Nothing is edited: the client is added at once
   QVERIFY(queue.submit(guest(1)));
@@ -1384,7 +1384,7 @@ void LanSessionTests::screenQueue_holdsClientsWhileEditing()
 void LanSessionTests::screenQueue_nestsAndSkipsWhatTheLayoutHas()
 {
   ClientScreenQueue queue;
-  ScreenList layout;
+  ComputerList layout;
 
   // A dialog on top of a dialog: the computers wait for both
   queue.open();
@@ -1405,7 +1405,7 @@ void LanSessionTests::screenQueue_nestsAndSkipsWhatTheLayoutHas()
 
   QVERIFY(ClientScreenQueue::inLayout(layout, guest(2).screenName));
   QVERIFY(!ClientScreenQueue::inLayout(layout, guest(1).screenName));
-  QVERIFY(!ClientScreenQueue::inLayout(ScreenList(), guest(1).screenName));
+  QVERIFY(!ClientScreenQueue::inLayout(ComputerList(), guest(1).screenName));
 }
 
 QTEST_GUILESS_MAIN(LanSessionTests)

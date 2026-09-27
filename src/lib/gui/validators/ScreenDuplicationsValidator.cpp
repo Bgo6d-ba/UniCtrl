@@ -5,12 +5,12 @@
  */
 
 #include "ScreenDuplicationsValidator.h"
-#include "gui/config/ScreenList.h"
+#include "gui/config/ComputerList.h"
 
 namespace validators {
 
 ScreenDuplicationsValidator::ScreenDuplicationsValidator(
-    const QString &message, const QString &defaultName, const ScreenList *screens
+    const QString &message, const QString &defaultName, const ComputerList *screens
 )
     : IStringValidator(message),
       m_defaultName(defaultName),

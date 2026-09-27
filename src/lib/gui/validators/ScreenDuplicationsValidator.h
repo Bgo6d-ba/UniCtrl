@@ -8,17 +8,17 @@
 
 #include "IStringValidator.h"
 
-class ScreenList;
+class ComputerList;
 
 namespace validators {
 
 class ScreenDuplicationsValidator : public IStringValidator
 {
   const QString m_defaultName;
-  const ScreenList *m_screenList = nullptr;
+  const ComputerList *m_screenList = nullptr;
 
 public:
-  ScreenDuplicationsValidator(const QString &message, const QString &defaultName, const ScreenList *screens);
+  ScreenDuplicationsValidator(const QString &message, const QString &defaultName, const ComputerList *screens);
   bool validate(const QString &input) const override;
 };
 
