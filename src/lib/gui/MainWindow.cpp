@@ -736,8 +736,8 @@ bool MainWindow::placeClientScreen(const lan::PeerIdentity &client)
   for (const auto &screen : screens) {
     if (screen.isNull())
       continue;
-    Settings::setValue(Settings::Screen::Aliases.arg(screen.name()), screen.aliases());
-    Settings::setValue(Settings::Screen::Name.arg(screen.name()), screen.name());
+    Settings::setValue(Settings::Computer::Aliases.arg(screen.name()), screen.aliases());
+    Settings::setValue(Settings::Computer::Name.arg(screen.name()), screen.name());
   }
   Settings::save();
   return true;

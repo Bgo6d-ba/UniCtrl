@@ -182,7 +182,7 @@ void SettingsTests::checkLanSettingsKept()
     Settings::setValue(Settings::Lan::HostingEnabled, QStringLiteral("true"));
 
     // The server config dialog removes unknown groups, loading a file removes unknown keys
-    Settings::removeUnknownScreens({});
+    Settings::removeUnknownComputers({});
     Settings::setSettingsFile(otherFile);
     Settings::setSettingsFile(m_settingsFile);
 

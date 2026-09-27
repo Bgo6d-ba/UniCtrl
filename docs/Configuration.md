@@ -98,10 +98,10 @@ This section contains general options it will begin with `[core]`
 | displayName   | string            | Name other computers show for this one when hosting or joining, up to 64 characters [default: computerName] |
 | useHooks      | `true` or `false` | If Windows uses hooks or not [default: true] |
 | language      | 639 language      | The language to display the GUI in [default: en] |
-| enableEnterCommand | `true` or `false` | Should the enter command be triggered when the screen is entered [defaut: false] |
-| enterCommand  | command | A command to run when the screen is entered. |
-| enableExitCommand | `true` or `false` | Should the exit command be triggered when the screen is exited [defaut: false] |
-| exitCommand  | command | A command to run when the screen is exited. |
+| enableEnterCommand | `true` or `false` | Should the enter command be triggered when the computer is entered [defaut: false] |
+| enterCommand  | command | A command to run when the computer is entered. |
+| enableExitCommand | `true` or `false` | Should the exit command be triggered when the computer is exited [defaut: false] |
+| exitCommand  | command | A command to run when the computer is exited. |
 
 ### Daemon
 
@@ -196,9 +196,9 @@ This section contains options used when in server mode it will begin with `[serv
 
  - You can use both the ''switchDelay'' and ''switchDoubleTap'' options at the same time. Deskflow will switch when either requirement is satisfied.
 
-### Screen Settings
+### Computer Settings
 
-Each screen will have a section where its configuration will be stored, if the screen was named "foo" the section will be named `[screen_foo]`
+Each computer will have a section where its configuration will be stored, if the computer was named "foo" the section will be named `[computer_foo]`
 
 |Option                  |    Valid Values   |Description|
 |:-----------------------|:-----------------:|:-----------|
