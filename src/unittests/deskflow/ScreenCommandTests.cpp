@@ -30,7 +30,7 @@ QString ScreenCommandTests::touchCommand(const QString &marker) const
 void ScreenCommandTests::disabledCommand_doesNotRun()
 {
   Settings::setValue(Settings::Core::EnableEnterCommand, false);
-  Settings::setValue(Settings::Core::ScreenEnterCommand, touchCommand(QStringLiteral("disabled")));
+  Settings::setValue(Settings::Core::ComputerEnterCommand, touchCommand(QStringLiteral("disabled")));
 
   App::runScreenCommand(true);
 
@@ -41,7 +41,7 @@ void ScreenCommandTests::disabledCommand_doesNotRun()
 void ScreenCommandTests::enterCommand_runsOnEnterOnly()
 {
   Settings::setValue(Settings::Core::EnableEnterCommand, true);
-  Settings::setValue(Settings::Core::ScreenEnterCommand, touchCommand(QStringLiteral("entered")));
+  Settings::setValue(Settings::Core::ComputerEnterCommand, touchCommand(QStringLiteral("entered")));
 
   App::runScreenCommand(false);
   QTest::qWait(500);
@@ -55,7 +55,7 @@ void ScreenCommandTests::exitCommand_runsOnExitOnly()
 {
   Settings::setValue(Settings::Core::EnableEnterCommand, false);
   Settings::setValue(Settings::Core::EnableExitCommand, true);
-  Settings::setValue(Settings::Core::ScreenExitCommand, touchCommand(QStringLiteral("left")));
+  Settings::setValue(Settings::Core::ComputerExitCommand, touchCommand(QStringLiteral("left")));
 
   App::runScreenCommand(true);
   QTest::qWait(500);

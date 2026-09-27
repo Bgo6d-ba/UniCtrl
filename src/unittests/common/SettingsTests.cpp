@@ -210,7 +210,7 @@ void SettingsTests::concurrentAccess()
   std::atomic_bool stop = false;
 
   QList<QThread *> threads;
-  for (const auto &key : {Settings::Core::ScreenEnterCommand, Settings::Core::ScreenExitCommand}) {
+  for (const auto &key : {Settings::Core::ComputerEnterCommand, Settings::Core::ComputerExitCommand}) {
     threads.append(QThread::create([&stop, key] {
       for (int i = 0; !stop; ++i) {
         Settings::setValue(key, QString::number(i));
