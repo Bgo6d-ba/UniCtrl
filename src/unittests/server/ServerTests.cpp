@@ -713,7 +713,7 @@ void ServerTests::clipboardGrab_notifiesOtherScreens()
   auto *right = h.connect("right");
   h.platform->m_clipboards.clear();
 
-  IScreen::ClipboardInfo info{kClipboardClipboard, 1};
+  IComputer::ClipboardInfo info{kClipboardClipboard, 1};
   h.events.send(EventTypes::ClipboardGrabbed, left->getEventTarget(), &info, Event::EventFlags::DontFreeData);
 
   QCOMPARE(right->m_grabs, std::vector<ClipboardID>{kClipboardClipboard});
@@ -729,13 +729,13 @@ void ServerTests::clipboardChange_fromNonOwner_isIgnored()
   h.start();
   auto *left = h.connect("left");
   auto *right = h.connect("right");
-  IScreen::ClipboardInfo grab{kClipboardClipboard, 1};
+  IComputer::ClipboardInfo grab{kClipboardClipboard, 1};
   h.events.send(EventTypes::ClipboardGrabbed, left->getEventTarget(), &grab, Event::EventFlags::DontFreeData);
   h.platform->m_clipboards.clear();
 
   // a remote client sends clipboard data without having grabbed the clipboard
   right->m_clipboardText = "not yours";
-  IScreen::ClipboardInfo change{kClipboardClipboard, 2};
+  IComputer::ClipboardInfo change{kClipboardClipboard, 2};
   h.events.send(EventTypes::ClipboardChanged, right->getEventTarget(), &change, Event::EventFlags::DontFreeData);
 
   QVERIFY(h.platform->m_clipboards.empty());
@@ -748,10 +748,10 @@ void ServerTests::clipboardGrab_ignoresStaleSequence()
   h.start();
   auto *left = h.connect("left");
   auto *right = h.connect("right");
-  IScreen::ClipboardInfo first{kClipboardClipboard, 5};
+  IComputer::ClipboardInfo first{kClipboardClipboard, 5};
   h.events.send(EventTypes::ClipboardGrabbed, left->getEventTarget(), &first, Event::EventFlags::DontFreeData);
 
-  IScreen::ClipboardInfo stale{kClipboardClipboard, 4};
+  IComputer::ClipboardInfo stale{kClipboardClipboard, 4};
   h.events.send(EventTypes::ClipboardGrabbed, right->getEventTarget(), &stale, Event::EventFlags::DontFreeData);
 
   QVERIFY(left->m_grabs.empty());
@@ -765,7 +765,7 @@ void ServerTests::clipboardGrab_ignoredWhenSharingDisabled()
   auto *left = h.connect("left");
   auto *right = h.connect("right");
 
-  IScreen::ClipboardInfo info{kClipboardClipboard, 1};
+  IComputer::ClipboardInfo info{kClipboardClipboard, 1};
   h.events.send(EventTypes::ClipboardGrabbed, left->getEventTarget(), &info, Event::EventFlags::DontFreeData);
 
   QVERIFY(right->m_grabs.empty());
@@ -778,7 +778,7 @@ void ServerTests::clipboardChanged_propagatesToActiveScreen()
   h.start();
   auto *left = h.connect("left");
   auto *right = h.connect("right");
-  IScreen::ClipboardInfo info{kClipboardClipboard, 1};
+  IComputer::ClipboardInfo info{kClipboardClipboard, 1};
   h.events.send(EventTypes::ClipboardGrabbed, left->getEventTarget(), &info, Event::EventFlags::DontFreeData);
   right->m_dirty.clear();
   h.platform->m_clipboards.clear();

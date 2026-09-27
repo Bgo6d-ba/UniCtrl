@@ -456,7 +456,7 @@ void ClientProxyTests::grabClipboard_postsGrab()
 
   const auto grabs = test.posted(EventTypes::ClipboardGrabbed);
   QCOMPARE(grabs.size(), 1);
-  const auto *info = static_cast<const IScreen::ClipboardInfo *>(grabs[0]->getData());
+  const auto *info = static_cast<const IComputer::ClipboardInfo *>(grabs[0]->getData());
   QCOMPARE(info->m_id, kClipboardSelection);
   QCOMPARE(info->m_sequenceNumber, 7u);
   QVERIFY(test.posted(EventTypes::ClientProxyDisconnected).empty());
@@ -509,7 +509,7 @@ void ClientProxyTests::clipboardTransfer_postsChange()
 
   const auto changes = test.posted(EventTypes::ClipboardChanged);
   QCOMPARE(changes.size(), 1);
-  QCOMPARE(static_cast<const IScreen::ClipboardInfo *>(changes[0]->getData())->m_sequenceNumber, 4u);
+  QCOMPARE(static_cast<const IComputer::ClipboardInfo *>(changes[0]->getData())->m_sequenceNumber, 4u);
   Clipboard clipboard;
   QVERIFY(test.proxy->getClipboard(kClipboardClipboard, &clipboard));
   QCOMPARE(clipboardText(&clipboard), "hello");
