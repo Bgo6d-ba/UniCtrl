@@ -117,7 +117,9 @@ MSWindowsScreen::~MSWindowsScreen()
 {
   assert(s_screen != nullptr);
 
-  disable();
+  if (m_isEnabled) {
+    disable();
+  }
   m_events->adoptBuffer(nullptr);
   m_events->removeHandler(EventTypes::System, m_events->getSystemTarget());
   delete m_keyState;
