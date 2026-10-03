@@ -1,5 +1,5 @@
 {
-    "org.deskflow.deskflow": [
+    "io.github.batmunkh0612.unictrl": [
         "appstream-external-screenshot-url",
         "appstream-screenshots-not-mirrored-in-ostree"
     ]

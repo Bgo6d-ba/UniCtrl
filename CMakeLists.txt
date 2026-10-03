@@ -103,7 +103,7 @@ set(CMAKE_PROJECT_PROPER_NAME "UniCtrl")
 set(CMAKE_PROJECT_VENDOR "${CMAKE_PROJECT_PROPER_NAME} Devs")
 set(CMAKE_PROJECT_COPYRIGHT "(C) 2024-2026 ${CMAKE_PROJECT_VENDOR}")
 set(CMAKE_PROJECT_CONTACT "${CMAKE_PROJECT_PROPER_NAME} <maintainers@deskflow.org>")
-set(CMAKE_PROJECT_REV_FQDN "org.deskflow.deskflow")
+set(CMAKE_PROJECT_REV_FQDN "io.github.batmunkh0612.unictrl")
 
 #Unset the vars used in the project call
 unset(DESKFLOW_VERSION_MAJOR)

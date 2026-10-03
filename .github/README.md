@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="UniCtrl" src="../src/apps/res/icons/deskflow-dark/apps/64/org.deskflow.deskflow.svg" width="96">
+  <img alt="UniCtrl" src="../src/apps/res/icons/deskflow-dark/apps/64/io.github.batmunkh0612.unictrl.svg" width="96">
 </p>
 
 <h1 align="center">UniCtrl</h1>

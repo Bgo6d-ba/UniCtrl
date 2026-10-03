@@ -1,4 +1,4 @@
-app-id: org.deskflow.deskflow
+app-id: io.github.batmunkh0612.unictrl
 runtime: org.kde.Platform
 runtime-version: "6.11"
 sdk: org.kde.Sdk

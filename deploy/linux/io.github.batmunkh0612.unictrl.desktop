@@ -4,10 +4,10 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Deskflow
+Name=UniCtrl
 Comment=Mouse and keyboard sharing utility
 Exec=deskflow
-Icon=org.deskflow.deskflow
+Icon=io.github.batmunkh0612.unictrl
 Terminal=false
 Categories=Utility;
 Keywords=keyboard;mouse;sharing;network;share;
