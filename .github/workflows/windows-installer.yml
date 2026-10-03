@@ -1,0 +1,66 @@
+# Manually triggered Windows x64 build that produces the MSI installer and the
+# portable ZIP. Same steps as the windows-2022-x64 target in
+# continuous-integration.yml, without the rest of the matrix.
+name: Windows installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GIT_SHA: ${{ github.sha }}
+  PACKAGE_PREFIX: "deskflow"
+  CMAKE_CONFIGURE: "cmake -Bbuild -DCMAKE_BUILD_TYPE=Release -DSKIP_BUILD_TESTS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
+
+jobs:
+  windows-x64:
+    name: windows-2022-x64
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Fancy Checkout
+        uses: sithlord48/fancy-checkout@8db15be361005e6d51b0a3b51b39bebd4cde170c # v2.0.0
+
+      - name: Setup VC++ environment
+        uses: TheMrMilchmann/setup-msvc-dev@368ef7d1ee4d1171b31d4a7f67f4d954f903f5a9 # v4.1.0
+        with:
+          arch: amd64
+          spectre: true
+
+      - name: Install dependencies
+        id: get-deps
+        uses: ./.github/actions/install-dependencies
+        with:
+          qt-version: 6.11.3
+          vcpkg-triplet: x64-windows-release
+
+      - name: Get version
+        uses: ./.github/actions/get-version
+
+      - name: Configure
+        run: ${{ env.CMAKE_CONFIGURE }} -G Ninja ${{ steps.get-deps.outputs.vcpkg-cmake-config }} -DPACKAGE_VERSION_LABEL="${{ env.DESKFLOW_PACKAGE_VERSION }}"
+
+      - name: Build
+        id: build
+        shell: bash
+        run: cmake --build build --config Release -j8 --target package
+
+      - name: Tests
+        uses: ./.github/actions/run-tests
+        timeout-minutes: 15
+        with:
+          job: windows-2022-x64
+
+      - name: Test package
+        uses: ./.github/actions/test-package
+
+      # Upload whenever packaging succeeded, so a failing test still leaves the installer to inspect.
+      - name: Upload
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deskflow-windows-x64
+          path: ${{ github.workspace }}/build/deskflow[-_]*.*

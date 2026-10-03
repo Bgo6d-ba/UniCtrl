@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: (C) 2025 Deskflow Developers
+# SPDX-License-Identifier: MIT
+
+create_test(
+  NAME SettingsTests
+  DEPENDS common
+  SOURCE SettingsTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)
+
+create_test(
+  NAME LogLevelTests
+  DEPENDS common
+  SOURCE LogLevelTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)
+
+create_test(
+  NAME I18NTests
+  DEPENDS common
+  SOURCE I18NTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)
+
+create_test(
+  NAME KeySequenceTests
+  DEPENDS common
+  SOURCE KeySequenceTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)
+
+create_test(
+  NAME IpcUtilsTests
+  DEPENDS common
+  SOURCE IpcUtilsTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)
+
+create_test(
+  NAME FileTrustTests
+  DEPENDS common
+  SOURCE FileTrustTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)

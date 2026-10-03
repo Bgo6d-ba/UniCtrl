@@ -1,0 +1,304 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2025 Deskflow Developers
+ * SPDX-FileCopyrightText: (C) 2021 Barrier Contributors
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#include "SecureUtils.h"
+
+#include "base/FinalAction.h"
+#include "common/FileTrust.h"
+
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+
+#include <QFile>
+#include <algorithm>
+#include <cstdio>
+#include <filesystem>
+#include <stdexcept>
+
+#if defined(Q_OS_WIN)
+// lean: wincrypt.h would otherwise define X509_NAME and friends over OpenSSL's types
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <fcntl.h>
+#include <io.h>
+#include <sddl.h>
+#include <string>
+#include <vector>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
+namespace deskflow {
+
+namespace {
+
+#if defined(Q_OS_WIN)
+std::wstring privateFileSddl(const std::filesystem::path &path)
+{
+  QString userSid;
+  HANDLE token = nullptr;
+  if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+    auto tokenClose = finally([token]() { CloseHandle(token); });
+    DWORD size = 0;
+    GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+    std::vector<BYTE> buffer(size);
+    LPWSTR sid = nullptr;
+    if (size != 0 && GetTokenInformation(token, TokenUser, buffer.data(), size, &size) &&
+        ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER *>(buffer.data())->User.Sid, &sid)) {
+      userSid = QString::fromWCharArray(sid);
+      LocalFree(sid);
+    }
+  }
+  return filetrust::privateFileSddl(QString::fromStdWString(path.wstring()), userSid).toStdWString();
+}
+#endif
+
+// The file will hold the private key, so it is created fresh (never reusing an
+// existing file another process may hold open) and readable only by its owner.
+FILE *createPrivateFile(const std::filesystem::path &path)
+{
+#if defined(Q_OS_WIN)
+  // The DACL is applied atomically at creation, and no sharing means no other handle.
+  PSECURITY_DESCRIPTOR descriptor = nullptr;
+  if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+          privateFileSddl(path).c_str(), SDDL_REVISION_1, &descriptor, nullptr
+      )) {
+    return nullptr;
+  }
+  auto descriptorFree = finally([descriptor]() { LocalFree(descriptor); });
+
+  SECURITY_ATTRIBUTES attributes = {static_cast<DWORD>(sizeof(SECURITY_ATTRIBUTES)), descriptor, FALSE};
+  DeleteFileW(path.c_str());
+  HANDLE handle = CreateFileW(path.c_str(), GENERIC_WRITE, 0, &attributes, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
+    return nullptr;
+  }
+  const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY);
+  if (fd == -1) {
+    CloseHandle(handle);
+    return nullptr;
+  }
+  auto *fp = _fdopen(fd, "w");
+  if (!fp) {
+    _close(fd);
+  }
+  return fp;
+#else
+  ::unlink(path.c_str());
+  const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
+  if (fd == -1) {
+    return nullptr;
+  }
+  auto *fp = ::fdopen(fd, "w");
+  if (!fp) {
+    ::close(fd);
+  }
+  return fp;
+#endif
+}
+
+const EVP_MD *digestForType(QCryptographicHash::Algorithm type)
+{
+  switch (type) {
+  case QCryptographicHash::Sha1:
+    return EVP_sha1();
+  case QCryptographicHash::Sha256:
+    return EVP_sha256();
+  default:
+    break;
+  }
+  throw std::runtime_error("Unknown fingerprint type " + std::to_string(static_cast<int>(type)));
+}
+
+} // namespace
+
+QString formatSSLFingerprint(const QByteArray &fingerprint, bool enableSeparators)
+{
+  if (enableSeparators)
+    return fingerprint.toHex(':').toUpper();
+  else
+    return fingerprint.toHex().toUpper();
+}
+
+Fingerprint sslCertFingerprint(const X509 *cert, QCryptographicHash::Algorithm type)
+{
+  if (!cert) {
+    throw std::runtime_error("certificate is null");
+  }
+
+  unsigned char digest[EVP_MAX_MD_SIZE];
+  unsigned int digestLength = 0;
+
+  if (int result = X509_digest(cert, digestForType(type), digest, &digestLength); result <= 0) {
+    throw std::runtime_error("failed to calculate fingerprint, digest result: " + std::to_string(result));
+  }
+
+  QByteArray digestArray(reinterpret_cast<const char *>(digest), digestLength);
+  return {type, digestArray};
+}
+
+void generatePemSelfSignedCert(const QString &path, int keyLength)
+{
+  auto expirationDays = 365;
+
+  auto *privateKey = EVP_RSA_gen(keyLength);
+  if (!privateKey) {
+    throw std::runtime_error("failed to generate a " + std::to_string(keyLength) + "bit key for certificate");
+  }
+  auto privateKeyFree = finally([privateKey]() { EVP_PKEY_free(privateKey); });
+
+  auto *cert = X509_new();
+  if (!cert) {
+    throw std::runtime_error("could not allocate certificate");
+  }
+  auto certFree = finally([cert]() { X509_free(cert); });
+
+  ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
+  X509_gmtime_adj(X509_get_notBefore(cert), 0);
+  X509_gmtime_adj(X509_get_notAfter(cert), expirationDays * 24 * 3600);
+  X509_set_pubkey(cert, privateKey);
+
+  auto *name = X509_NAME_new();
+  if (!name) {
+    throw std::runtime_error("could not allocate subject name");
+  }
+  X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>("Deskflow"), -1, -1, 0);
+  X509_set_subject_name(cert, name);
+  X509_set_issuer_name(cert, name);
+  X509_NAME_free(name);
+
+  X509_sign(cert, privateKey, EVP_sha256());
+  const std::filesystem::path target = QFile(path).filesystemFileName();
+  auto temp = target;
+  temp += ".tmp";
+  auto *fp = createPrivateFile(temp);
+  if (!fp) {
+    throw std::runtime_error("could not open certificate output path");
+  }
+
+  const bool written =
+      PEM_write_PrivateKey(fp, privateKey, nullptr, nullptr, 0, nullptr, nullptr) == 1 && PEM_write_X509(fp, cert) == 1;
+  const bool closed = std::fclose(fp) == 0;
+
+  // Renamed over the target so the old cert stays intact until the new one is complete
+  std::error_code error;
+  if (written && closed) {
+    std::filesystem::rename(temp, target, error);
+  }
+  if (!written || !closed || error) {
+    std::filesystem::remove(temp, error);
+    throw std::runtime_error("could not write certificate");
+  }
+}
+
+QString formatSSLFingerprintColumns(const QByteArray &fingerprint)
+{
+  auto kMaxColumns = 24;
+
+  QString hex = fingerprint.toHex(':').toUpper();
+  if (hex.isEmpty()) {
+    return hex;
+  }
+
+  QString formattedString;
+  while (!hex.isEmpty()) {
+    const auto take = std::min<size_t>(kMaxColumns, hex.size());
+    formattedString.append(hex.first(take));
+    hex.remove(0, take);
+    if (formattedString.endsWith(QLatin1Char(':')))
+      formattedString.removeLast();
+    formattedString.append(QLatin1Char('\n'));
+  }
+  formattedString.removeLast();
+  return formattedString;
+}
+
+/*
+    Draw an ASCII-Art representing the fingerprint so human brain can
+    profit from its built-in pattern recognition ability.
+    This technique is called "random art" and can be found in some
+    scientific publications like this original paper:
+    "Hash Visualization: a New Technique to improve Real-World Security",
+    Perrig A. and Song D., 1999, International Workshop on Cryptographic
+    Techniques and E-Commerce (CrypTEC '99)
+    sparrow.ece.cmu.edu/~adrian/projects/validation/validation.pdf
+    The subject came up in a talk by Dan Kaminsky, too.
+    If you see the picture is different, the key is different.
+    If the picture looks the same, you still know nothing.
+    The algorithm used here is a worm crawling over a discrete plane,
+    leaving a trace (augmenting the field) everywhere it goes.
+    Movement is taken from rawDigest 2bit-wise.  Bumping into walls
+    makes the respective movement vector be ignored for this turn.
+    Graphs are not unambiguous, because circles in graphs can be
+walked in either direction.
+ */
+
+/*
+    Field sizes for the random art.  Have to be odd, so the starting point
+    can be in the exact middle of the picture, and `baseSize` should be >=8 .
+    Else pictures would be too dense, and drawing the frame would
+    fail, too, because the key type would not fit in anymore.
+*/
+
+QString generateFingerprintArt(const QByteArray &rawDigest)
+{
+  const auto baseSize = 8;
+  const auto rows = (baseSize + 1);
+  const auto columns = (baseSize * 2 + 1);
+  const auto characterPool = QStringLiteral(" .o+=*BOX@%&#/^SE");
+  const std::size_t len = characterPool.length() - 1;
+
+  std::uint8_t field[columns][rows];
+  memset(field, 0, columns * rows * sizeof(char));
+  int x = columns / 2;
+  int y = rows / 2;
+
+  /* process raw key */
+  for (std::uint8_t byte : rawDigest) {
+    /* each byte conveys four 2-bit move commands */
+    for (uint32_t b = 0; b < 4; b++) {
+      /* evaluate 2 bit, rest is shifted later */
+      x += (byte & 0x1) ? 1 : -1;
+      y += (byte & 0x2) ? 1 : -1;
+
+      /* assure we are still in bounds */
+      x = std::clamp(x, 0, columns - 1);
+      y = std::clamp(y, 0, rows - 1);
+
+      /* augment the field */
+      if (field[x][y] < len - 2)
+        field[x][y]++;
+      byte >>= 2;
+    }
+  }
+
+  /* mark starting point and end point*/
+  field[columns / 2][rows / 2] = len - 1;
+  field[x][y] = len;
+
+  QString result;
+  result.reserve((columns + 3) * (rows + 2));
+  result.append(QStringLiteral("╔═════════════════╗\n"));
+
+  /* output content */
+  for (y = 0; y < rows; y++) {
+    result.append(QStringLiteral("║"));
+    for (x = 0; x < columns; x++)
+      result.append(characterPool.at(std::min<int>(field[x][y], len)));
+    result.append(QStringLiteral("║\n"));
+  }
+
+  result.append(QStringLiteral("╚═════════════════╝"));
+  return result;
+}
+
+} // namespace deskflow

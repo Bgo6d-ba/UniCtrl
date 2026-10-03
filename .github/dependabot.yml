@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions (and their version comments) current
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Digest-pinned CI container images (.github/ci-images/Dockerfile); Dependabot can't update
+  # `container:` in workflow files, so the workflows read the digests from there
+  - package-ecosystem: "docker"
+    directory: "/.github/ci-images"
+    schedule:
+      interval: "weekly"
+    groups:
+      ci-images:
+        patterns:
+          - "*"

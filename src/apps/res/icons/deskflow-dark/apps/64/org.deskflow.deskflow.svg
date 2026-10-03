@@ -1,0 +1,5 @@
+<svg version="1.1" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>
+<rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/>
+<polygon fill="#04110c" transform="translate(12.8 12.8) scale(.384)" points="58,8 22,56 46,56 40,92 78,42 54,42"/>
+</svg>

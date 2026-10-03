@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
+# SPDX-License-Identifier: MIT
+
+# LeakSanitizer suppressions for the fuzz targets: third-party allocations made once per process only.
+
+# Qt keeps a default QCollator per thread; the main thread's copy outlives Qt's own storage at exit.
+leak:QCollator::defaultCompare

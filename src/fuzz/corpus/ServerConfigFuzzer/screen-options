@@ -1,0 +1,9 @@
+section: screens
+  alpha:
+    halfDuplexCapsLock = true
+    shift = ctrl
+end
+section: aliases
+  beta:
+    b2
+end

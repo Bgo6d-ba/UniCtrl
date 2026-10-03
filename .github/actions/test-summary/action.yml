@@ -1,0 +1,94 @@
+name: "Test Summary"
+description: "Creates a markdown table from test results and uploads a summary file"
+
+inputs:
+  download-pattern:
+    description: "The pattern to download test result rows"
+    required: false
+    default: test-result-*
+
+  upload-name:
+    description: "The artifact upload name for the summary"
+    required: false
+    default: summary-tests
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download test result rows
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        pattern: ${{ inputs.download-pattern }}
+        merge-multiple: true
+        path: rows
+
+    - name: Build markdown table
+      id: markdown-table
+      run: |
+        # Builds a markdown table from the row artifacts.
+
+        header=$(cat <<EOF
+        | OS | Unit tests |
+        | --- | --- |
+        EOF
+        )
+
+        rows=""
+        for file in rows/*; do
+          rows+=$(cat "$file")
+          rows+=$'\n'
+        done
+
+        {
+          echo "markdown<<EOF"
+          echo "$header"
+          echo "$rows"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Set step summary
+      id: summary
+      env:
+        table: ${{ steps.markdown-table.outputs.markdown }}
+      run: |
+        # Sets the step summary and creates a CI summary file.
+
+        if [ -z "$table" ]; then
+          echo "No test results found" | tee $GITHUB_STEP_SUMMARY >&2
+          exit 1
+        fi
+
+        echo "$table" > $GITHUB_STEP_SUMMARY
+
+        count=$(echo "$table" | { grep -o '❌' || true; } | wc -l)
+
+        # Keep at this indentation level for heredoc.
+        fail_summary=$(cat <<EOF
+        ### Test result
+        
+        ❌🔬 Tests failed: $count
+        
+        $table
+        EOF
+        )
+
+        file="ci-summary.md"
+        if [ $count -gt 0 ]; then
+          echo "$fail_summary" | tee $file
+          echo "file=$file" >> $GITHUB_OUTPUT
+        else
+          # For debugging; don't send success to CI summary (reduce noise).
+          echo > $file
+          echo "✅🔬 All tests passed"
+        fi
+
+      shell: bash
+
+    - name: Upload CI summary
+      if: steps.summary.outputs.file
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.upload-name }}
+        path: ${{ steps.summary.outputs.file }}
+        if-no-files-found: error

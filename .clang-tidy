@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
+# SPDX-License-Identifier: MIT
+
+# Bug finders and cheap performance wins; CI fails on any finding in changed files.
+# Every disabled check below is noise for this codebase, with the reason alongside.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-branch-clone,
+  -bugprone-macro-parentheses,
+  -bugprone-reserved-identifier,
+  -bugprone-exception-escape,
+  -bugprone-throwing-static-initialization,
+  -bugprone-standalone-empty,
+  -bugprone-derived-method-shadowing-base-method,
+  performance-*,
+  -performance-enum-size,
+  -performance-avoid-endl,
+  concurrency-*,
+  cert-*,
+  -cert-err58-cpp,
+  -cert-dcl50-cpp,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -cert-int09-c,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-redundant-void-arg,
+  modernize-use-bool-literals,
+  readability-redundant-string-cstr,
+  readability-misleading-indentation,
+  readability-delete-null-pointer,
+  readability-container-size-empty
+
+# Why the checks above are off:
+#   easily-swappable-parameters     every (x, y) / (w, h) pair in the screen and protocol APIs
+#   narrowing-conversions           protocol code narrows on purpose after range checks
+#   implicit-widening-of-mult...    pixel arithmetic on small ints, never near overflow
+#   branch-clone                    switch tables mapping several keys to the same value
+#   macro-parentheses               LOG_* style macros that expand to statements
+#   reserved-identifier, cert-dcl37-c, cert-dcl51-cpp
+#                                   Apple/X11 private symbols (_CGSDefaultConnection) must keep their names
+#   exception-escape                destructors and Qt slots that only log
+#   throwing-static-initialization, cert-err58-cpp
+#                                   static std::string/QString tables; bad_alloc at startup is fatal anyway
+#   standalone-empty                IClipboard::empty() clears the clipboard, it is not a query
+#   derived-method-shadowing-...    Qt widgets hide non-virtual base members on purpose (hide, model)
+#   performance-enum-size           enum sizes are part of the wire protocol and ABI
+#   performance-avoid-endl          logging and config writers flush deliberately
+#   cert-dcl50-cpp                  printf-style Log::print and string::sprintf are the logging API
+#   cert-int09-c                    enum range aliases such as FirstDirection = Left
+CheckOptions:
+  # No code calls setenv/putenv, so getenv is safe; the glibc list still flags strerror, exit, localtime...
+  concurrency-mt-unsafe.FunctionSet: glibc
+WarningsAsErrors: ""
+HeaderFilterRegex: "src/(lib|apps|unittests)/"
+ExcludeHeaderFilterRegex: "_autogen/"
+FormatStyle: none

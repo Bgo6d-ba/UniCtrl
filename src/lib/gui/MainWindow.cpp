@@ -1,0 +1,1457 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2025 Deskflow Developers
+ * SPDX-FileCopyrightText: (C) 2024 - 2026 Chris Rizzitello <sithord48@gmail.com>
+ * SPDX-FileCopyrightText: (C) 2012 - 2024 Synergy App Ltd
+ * SPDX-FileCopyrightText: (C) 2008 Volker Lanz <vl@fidra.de>
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#include "MainWindow.h"
+#include "ui_MainWindow.h"
+
+#include "Diagnostic.h"
+#include "StyleUtils.h"
+
+#include "dialogs/AboutDialog.h"
+#include "dialogs/ClientConfigDialog.h"
+#include "dialogs/FingerprintDialog.h"
+#include "dialogs/HelpDialog.h"
+#include "dialogs/ServerConfigDialog.h"
+#include "dialogs/SettingsDialog.h"
+
+#include "common/PlatformInfo.h"
+#include "common/Settings.h"
+#include "common/UrlConstants.h"
+#include "common/VersionInfo.h"
+#include "gui/Messages.h"
+#include "gui/TlsUtility.h"
+#include "gui/core/CoreProcess.h"
+#include "gui/ipc/DaemonIpcClient.h"
+#include "gui/lan/LanSession.h"
+#include "gui/widgets/LogDock.h"
+#include "widgets/StatusBar.h"
+
+#include <QCheckBox>
+#include <QCloseEvent>
+#include <QDesktopServices>
+#include <QFileDialog>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkInterface>
+#include <QPushButton>
+#include <QRegularExpression>
+#include <QRegularExpressionValidator>
+#include <QScreen>
+#include <QScrollBar>
+
+#include <algorithm>
+#include <memory>
+
+#if defined(Q_OS_MACOS)
+#include <ApplicationServices/ApplicationServices.h>
+#endif
+
+using namespace deskflow::gui;
+
+MainWindow::MainWindow()
+    : ui{std::make_unique<Ui::MainWindow>()},
+      m_coreProcess(m_serverConfig),
+      m_trayIcon{new QSystemTrayIcon(this)},
+      m_guiDupeChecker{new QLocalServer(this)},
+      m_daemonIpcClient{new ipc::DaemonIpcClient(this)},
+      m_lanSession{new lan::LanSession(this)},
+      m_logDock{new LogDock(this)},
+      m_statusBar{new StatusBar(this)},
+      m_menuFile{new QMenu(this)},
+      m_menuEdit{new QMenu(this)},
+      m_menuView{new QMenu(this)},
+      m_menuHelp{new QMenu(this)},
+      m_actionAbout{new QAction(this)},
+      m_actionMinimize{new QAction(this)},
+      m_actionQuit{new QAction(this)},
+      m_actionTrayQuit{new QAction(this)},
+      m_actionRestore{new QAction(this)},
+      m_actionSettings{new QAction(this)},
+      m_actionStartCore{new QAction(this)},
+      m_actionRestartCore{new QAction(this)},
+      m_actionStopCore{new QAction(this)},
+      m_actionShowHelp{new QAction(this)},
+      m_networkMonitor{new NetworkMonitor(this)}
+{
+  ui->setupUi(this);
+
+  setWindowIcon(QIcon::fromTheme(kRevFqdnName));
+
+  addDockWidget(Qt::BottomDockWidgetArea, m_logDock);
+
+  // Setup Actions
+  m_actionAbout->setMenuRole(QAction::AboutRole);
+  m_actionAbout->setIcon(QIcon::fromTheme(QIcon::ThemeIcon::HelpAbout));
+
+  m_actionMinimize->setIcon(QIcon::fromTheme(QStringLiteral("window-minimize-pip")));
+  m_actionRestore->setIcon(QIcon::fromTheme(QStringLiteral("window-restore-pip")));
+
+  if (!deskflow::platform::isWindows()) {
+    m_actionQuit->setShortcut(QKeySequence::Quit);
+    m_actionTrayQuit->setShortcut(QKeySequence::Quit);
+  }
+
+  m_actionQuit->setIcon(QIcon::fromTheme("application-exit"));
+  m_actionQuit->setMenuRole(QAction::QuitRole);
+
+  m_actionTrayQuit->setIcon(QIcon::fromTheme("application-exit"));
+  m_actionTrayQuit->setMenuRole(QAction::NoRole);
+
+  m_actionSettings->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
+  m_actionSettings->setMenuRole(QAction::PreferencesRole);
+  m_actionSettings->setShortcut(QKeySequence::Preferences);
+
+  m_actionStartCore->setIcon(QIcon::fromTheme(QStringLiteral("system-run")));
+  m_actionStartCore->setMenuRole(QAction::NoRole);
+
+  m_actionRestartCore->setVisible(false);
+  m_actionRestartCore->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+  m_actionRestartCore->setMenuRole(QAction::NoRole);
+
+  m_actionStopCore->setIcon(QIcon::fromTheme(QIcon::ThemeIcon::ProcessStop));
+  m_actionStopCore->setMenuRole(QAction::NoRole);
+
+  m_actionShowHelp->setIcon(QIcon::fromTheme(QStringLiteral("question")));
+  m_actionShowHelp->setMenuRole(QAction::NoRole);
+  m_actionShowHelp->setShortcut(QKeySequence::HelpContents);
+
+  // Setup the Instance Checking
+  // In case of a previous crash remove first
+  QLocalServer::removeServer(m_guiSocketName);
+  m_guiDupeChecker->listen(m_guiSocketName);
+
+  createMenuBar();
+  setupControls();
+  updateText();
+  connectSlots();
+  setupTrayIcon();
+  updateScreenName();
+  setHelpFilePath();
+
+  qDebug().noquote() << "active settings path:" << Settings::settingsPath();
+
+  // Force generation of a certificate on the host
+  if (TlsUtility::isEnabled()) {
+    if (TlsUtility::enforceMinKeySize()) {
+      QMessageBox::information(
+          this, kDisplayName,
+          tr("Your current TLS key is smaller than the minimum allowed size, A new key 2048-bit key will be generated.")
+      );
+    }
+    updateFingerprint(false);
+  }
+
+  applyConfig();
+  m_statusBar->setSecurityIcon(TlsUtility::isEnabled());
+  restoreWindow();
+  // Showing the view that was chosen saves nothing: settings are only written for what the user did
+  showView(Settings::value(Settings::Gui::AdvancedView).toBool());
+
+#ifdef Q_OS_MACOS
+  // Route native quits (Cmd+Q / Apple menu Quit / Dock "Quit") to the usual close-to-tray decision instead.
+  installQuitHandler([this] { return !maybeHideToTray(); });
+#endif
+}
+MainWindow::~MainWindow()
+{
+  // Stop network monitoring
+  if (m_networkMonitor) {
+    m_networkMonitor->stopMonitoring();
+  }
+
+  m_guiDupeChecker->close();
+  m_coreProcess.cleanup();
+}
+
+void MainWindow::restoreWindow()
+{
+  auto windowGeometry = Settings::value(Settings::Gui::WindowGeometry).toRect();
+  const auto totalGeometry = QGuiApplication::primaryScreen()->availableGeometry();
+  if (!windowGeometry.isValid()) {
+    adjustSize();
+    windowGeometry = geometry();
+  } else {
+    setGeometry(windowGeometry);
+  }
+  m_expandedSize = geometry().size();
+
+  if (!totalGeometry.contains(windowGeometry)) {
+    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+    move(screenGeometry.center() - rect().center());
+  }
+
+  if (!Settings::value(Settings::Gui::LogExpanded).toBool())
+    setFixedSize(size());
+}
+
+void MainWindow::setupControls()
+{
+  secureSocket(false);
+
+  ui->btnConfigureServer->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
+  ui->btnConfigureClient->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
+
+  if (Settings::value(Settings::Core::LastVersion).toString() != kVersion) {
+    Settings::setValue(Settings::Core::LastVersion, kVersion);
+  }
+
+  if (!Settings::value(Settings::Gui::LogExpanded).toBool()) {
+    m_logDock->hide();
+  }
+
+  ui->serverOptions->setVisible(false);
+  ui->clientOptions->setVisible(false);
+
+  const auto coreMode = Settings::value(Settings::Core::CoreMode).value<Settings::CoreMode>();
+  ui->rbModeClient->setChecked(coreMode == Settings::CoreMode::Client);
+  ui->rbModeServer->setChecked(coreMode == Settings::CoreMode::Server);
+
+  ui->lineEditName->setValidator(new QRegularExpressionValidator(m_nameRegEx, this));
+  ui->lineEditName->setVisible(false);
+  ui->lineEditName->installEventFilter(this);
+
+  ui->hostJoinWidget->setDisplayName(Settings::displayName());
+
+  if (deskflow::platform::isMac()) {
+    ui->rbModeServer->setAttribute(Qt::WA_MacShowFocusRect, false);
+    ui->rbModeClient->setAttribute(Qt::WA_MacShowFocusRect, false);
+    ui->btnSaveServerConfig->setFixedWidth(ui->btnSaveServerConfig->height());
+  } else {
+    ui->btnSaveServerConfig->setIconSize(QSize(22, 22));
+  }
+  setStatusBar(m_statusBar);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Begin slots
+//////////////////////////////////////////////////////////////////////////////
+
+// remember: using queued connection allows the render loop to run before
+// executing the slot. the default is to instantly call the slot when the
+// signal is emitted from the thread that owns the receiver's object.
+void MainWindow::connectSlots()
+{
+  connect(Settings::instance(), &Settings::serverSettingsChanged, this, &MainWindow::serverConfigSaving);
+  connect(Settings::instance(), &Settings::settingsChanged, this, &MainWindow::settingsChanged);
+
+  connect(&m_coreProcess, &CoreProcess::error, this, &MainWindow::coreProcessError);
+  connect(&m_coreProcess, &CoreProcess::logLine, this, &MainWindow::handleLogLine);
+  // The session hears of the core before the window does, which asks it whether it hosts
+  connect(
+      &m_coreProcess, &CoreProcess::processStateChanged, m_lanSession, &lan::LanSession::coreProcessStateChanged,
+      Qt::QueuedConnection
+  );
+  connect(
+      &m_coreProcess, &CoreProcess::processStateChanged, this, &MainWindow::coreProcessStateChanged,
+      Qt::QueuedConnection
+  );
+  connect(&m_coreProcess, &CoreProcess::connectionStateChanged, this, &MainWindow::coreConnectionStateChanged);
+  connect(&m_coreProcess, &CoreProcess::secureSocket, this, &MainWindow::secureSocket);
+  connect(
+      &m_coreProcess, &CoreProcess::daemonIpcClientConnectionFailed, this, &MainWindow::daemonIpcClientConnectionFailed
+  );
+  connect(&m_coreProcess, &CoreProcess::securityLevelChanged, m_statusBar, &StatusBar::setSecurityLevel);
+
+  connect(m_actionAbout, &QAction::triggered, this, &MainWindow::openAboutDialog);
+  connect(m_actionMinimize, &QAction::triggered, this, &MainWindow::hide);
+
+  connect(m_actionQuit, &QAction::triggered, this, &MainWindow::close);
+  connect(m_actionTrayQuit, &QAction::triggered, this, &MainWindow::close);
+  connect(m_actionRestore, &QAction::triggered, this, &MainWindow::showAndActivate);
+  connect(m_actionSettings, &QAction::triggered, this, &MainWindow::openSettings);
+  connect(m_actionStartCore, &QAction::triggered, this, &MainWindow::startCore);
+  connect(m_actionRestartCore, &QAction::triggered, this, &MainWindow::resetCore);
+  connect(m_actionStopCore, &QAction::triggered, this, &MainWindow::stopCore);
+  connect(m_actionShowHelp, &QAction::triggered, this, &MainWindow::showHelpViewer);
+
+  // Mac os tray will only show a menu
+  if (!deskflow::platform::isMac())
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, &MainWindow::trayIconActivated);
+
+  connect(&m_coreProcess, &CoreProcess::connectedClientsChanged, this, &MainWindow::serverClientsChanged);
+  connect(&m_coreProcess, &CoreProcess::unrecognisedClient, this, &MainWindow::handleUnrecognisedClient);
+  connect(&m_coreProcess, &CoreProcess::connectionRefused, this, &MainWindow::handleConnectionRefused);
+  connect(&m_coreProcess, &CoreProcess::retryIn, this, &MainWindow::updateTimeoutDelay);
+  connect(&m_coreProcess, &CoreProcess::peerFingerprint, this, &MainWindow::handlePeerFingerprint);
+  connect(&m_coreProcess, &CoreProcess::missingKeyboardLayouts, this, &MainWindow::handleMissingKeyboardLayouts);
+
+  if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
+    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStopCore, &QAction::trigger, Qt::UniqueConnection);
+  } else {
+    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger, Qt::UniqueConnection);
+  }
+
+  connect(ui->btnRestartCore, &QPushButton::clicked, this, &MainWindow::resetCore);
+
+  connect(ui->lineHostname, &QLineEdit::returnPressed, ui->btnRestartCore, &QPushButton::click);
+  connect(ui->lineHostname, &QLineEdit::textChanged, this, &MainWindow::remoteHostChanged);
+
+  connect(ui->btnSaveServerConfig, &QPushButton::clicked, this, &MainWindow::saveServerConfig);
+  connect(ui->btnConfigureServer, &QPushButton::clicked, this, [this] { showConfigureServer(""); });
+  connect(ui->btnConfigureClient, &QPushButton::clicked, this, [this] { showConfigureClient(); });
+  connect(ui->lblComputerName, &QLabel::linkActivated, this, &MainWindow::openSettings);
+
+  connect(ui->rbModeServer, &QRadioButton::toggled, this, &MainWindow::coreModeToggled);
+  connect(ui->rbModeClient, &QRadioButton::toggled, this, &MainWindow::coreModeToggled);
+
+  connect(m_logDock->toggleViewAction(), &QAction::toggled, this, &MainWindow::toggleLogVisible);
+
+  connect(m_statusBar, &StatusBar::requestShowMyFingerprints, this, &MainWindow::showMyFingerprint);
+  connect(m_statusBar, &StatusBar::requestUpdateVersion, this, &MainWindow::openGetNewVersionUrl);
+  connect(&m_versionChecker, &VersionChecker::updateFound, m_statusBar, &StatusBar::updateFound);
+
+  connect(m_guiDupeChecker, &QLocalServer::newConnection, this, &MainWindow::showAndActivate);
+
+  connect(ui->btnEditName, &QPushButton::clicked, this, &MainWindow::showHostNameEditor);
+
+  connect(ui->lineEditName, &QLineEdit::editingFinished, this, &MainWindow::setHostName);
+
+  connect(m_networkMonitor, &NetworkMonitor::ipAddressesChanged, this, &MainWindow::updateIpLabel);
+
+  connectHostJoin();
+}
+
+void MainWindow::connectHostJoin()
+{
+  using lan::LanSession;
+  const auto session = m_lanSession;
+  const auto hostJoin = ui->hostJoinWidget;
+
+  connect(hostJoin, &HostJoinWidget::advancedViewRequested, this, [this] { setAdvancedView(true); });
+  connect(ui->btnSimpleView, &QPushButton::clicked, this, [this] { setAdvancedView(false); });
+  connect(hostJoin, &HostJoinWidget::arrangeScreensRequested, this, [this] { showConfigureServer(""); });
+  connect(hostJoin, &HostJoinWidget::displayNameChanged, this, [](const QString &name) {
+    Settings::setValue(Settings::Core::DisplayName, name);
+  });
+
+  // The view asks, the session decides
+  connect(hostJoin, &HostJoinWidget::browsingChanged, session, [session](bool browsing) {
+    browsing ? session->startBrowsing() : session->stopBrowsing();
+  });
+  connect(hostJoin, &HostJoinWidget::hostRequested, session, &LanSession::startHosting);
+  connect(hostJoin, &HostJoinWidget::stopHostingRequested, session, &LanSession::stopHosting);
+  connect(hostJoin, &HostJoinWidget::newCodeRequested, session, &LanSession::newCode);
+  connect(hostJoin, &HostJoinWidget::customPasswordRequested, session, &LanSession::setCustomPassword);
+  connect(hostJoin, &HostJoinWidget::joinRequested, session, &LanSession::join);
+  connect(hostJoin, &HostJoinWidget::rejoinRequested, session, &LanSession::rejoin);
+  connect(hostJoin, &HostJoinWidget::leaveRequested, session, &LanSession::leave);
+
+  connect(session, &LanSession::hostsChanged, hostJoin, &HostJoinWidget::setNearbyHosts);
+  connect(session, &LanSession::hostingChanged, hostJoin, &HostJoinWidget::setHostingState);
+  connect(session, &LanSession::codeChanged, hostJoin, &HostJoinWidget::setCode);
+  connect(session, &LanSession::joinedComputersChanged, hostJoin, &HostJoinWidget::setJoinedComputers);
+  connect(session, &LanSession::joinStateChanged, hostJoin, &HostJoinWidget::setJoinState);
+  connect(session, &LanSession::error, hostJoin, &HostJoinWidget::showError);
+  connect(session, &LanSession::legacySessionChanged, hostJoin, &HostJoinWidget::setLegacySessionNotice);
+  connect(session, &LanSession::clientJoined, this, [this](const QString &name) {
+    m_statusBar->showMessage(tr("%1 joined").arg(name), 5000);
+  });
+
+  // The session asks, the core does
+  connect(session, &LanSession::startCoreRequested, this, &MainWindow::startCoreAs);
+  connect(session, &LanSession::stopCoreRequested, this, &MainWindow::stopCore);
+  connect(session, &LanSession::addClientScreenRequested, this, &MainWindow::addClientScreen);
+
+  // The session follows the core (its process state is connected first, in connectSlots)
+  connect(&m_coreProcess, &CoreProcess::connectionStateChanged, session, &LanSession::coreConnectionStateChanged);
+  connect(&m_coreProcess, &CoreProcess::connectedClientsChanged, session, &LanSession::connectedClientsChanged);
+}
+
+void MainWindow::setAdvancedView(bool advanced)
+{
+  Settings::setValue(Settings::Gui::AdvancedView, advanced);
+  showView(advanced);
+}
+
+void MainWindow::showView(bool advanced)
+{
+  ui->stackedViews->setCurrentWidget(advanced ? ui->advancedView : ui->hostJoinWidget);
+  m_lanSession->setSimpleView(!advanced);
+
+  // The stack is as tall as its tallest page, unless the hidden page ignores its height. A hidden widget's policy
+  // does not update the cached size hints, so they are refreshed up to the window.
+  ui->hostJoinWidget->setSizePolicy(QSizePolicy::Preferred, advanced ? QSizePolicy::Ignored : QSizePolicy::Preferred);
+  ui->advancedView->setSizePolicy(QSizePolicy::Preferred, advanced ? QSizePolicy::Preferred : QSizePolicy::Ignored);
+  for (QWidget *widget = ui->stackedViews; !widget->isWindow(); widget = widget->parentWidget())
+    widget->updateGeometry();
+
+  // Without a docked log the window has a fixed size, fitted to its contents
+  if (Settings::value(Settings::Gui::LogExpanded).toBool() && !m_logDock->isFloating())
+    return;
+  setFixedSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+  adjustSize();
+  setFixedSize(size());
+}
+
+void MainWindow::toggleLogVisible(bool visible)
+{
+  // When the main window is hidden e.g. close to tray / minimized), this also triggers the log visibility toggle,
+  // but we don't want to hide the log in this case since we would need to un-hide it when the window is shown again.
+  if (!isVisible() || isMinimized()) {
+    qDebug() << "not toggling log, window not visible";
+    return;
+  }
+
+  setFixedSize(16777215, 16777215);
+  Settings::setValue(Settings::Gui::LogExpanded, visible);
+  if (visible) {
+    if (m_logDock->isFloating()) {
+      adjustSize();
+      setFixedSize(size());
+    } else {
+      QTimer::singleShot(15, this, [&] { resize(m_expandedSize); });
+    }
+  } else {
+    if (!m_logDock->isFloating()) {
+      m_expandedSize = geometry().size();
+    }
+    m_logDock->hide();
+    if (!m_logDock->isFloating()) {
+      adjustSize();
+    }
+    setFixedSize(size());
+  }
+  Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+}
+
+void MainWindow::settingsChanged(const QString &key)
+{
+  if (key == Settings::Log::Level) {
+    m_coreProcess.applyLogLevel();
+    return;
+  }
+
+  if (key == Settings::Core::ComputerName)
+    updateScreenName();
+
+  if (key == Settings::Core::ComputerName || key == Settings::Core::DisplayName)
+    ui->hostJoinWidget->setDisplayName(Settings::displayName());
+
+  if (key == Settings::Core::ComputerName || key == Settings::Core::DisplayName || key == Settings::Core::Port)
+    m_lanSession->refresh();
+
+  if ((key == Settings::Security::Certificate) || (key == Settings::Security::KeySize) ||
+      (key == Settings::Security::TlsEnabled) || (key == Settings::Security::CheckPeers)) {
+    if (TlsUtility::isEnabled())
+      updateFingerprint(true);
+    updateSecurityIcon(m_statusBar->securityIconVisible());
+    m_lanSession->refresh();
+    return;
+  }
+}
+
+void MainWindow::serverConfigSaving()
+{
+  m_serverConfig.commit();
+}
+
+void MainWindow::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+  if (reason != QSystemTrayIcon::Trigger)
+    return;
+  isVisible() ? hide() : showAndActivate();
+}
+
+void MainWindow::coreProcessError(CoreProcess::Error error)
+{
+  if (error == CoreProcess::Error::AddressMissing) {
+    QMessageBox::warning(
+        this, tr("Address missing"), tr("Please enter the hostname or IP address of the other computer.")
+    );
+  } else if (error == CoreProcess::Error::StartFailed) {
+    show();
+    auto message = tr("The Core executable could not be started.\n"
+                      "Please check if you have sufficient permissions to run %1.")
+                       .arg(kCoreBinName);
+
+    if (Settings::value(Settings::Core::CoreMode) == Settings::CoreMode::Server) {
+      const auto mode =
+          Settings::value(Settings::Server::ExternalConfigFile).toBool() ? tr("read") : tr("read and write");
+      message.append(tr("\nAdditionally, check you are able to %1 the server config file: %2")
+                         .arg(mode, Settings::serverConfigFile()));
+    }
+    QMessageBox::warning(this, kDisplayName, message);
+  }
+}
+
+void MainWindow::startCore()
+{
+  // Save current IP state when server starts
+  if (m_coreProcess.mode() == CoreMode::Server && Settings::value(Settings::Core::Interface).toString().isEmpty()) {
+    m_serverStartIPs = NetworkMonitor::validAddresses();
+    m_serverStartSuggestedIP = m_serverStartIPs.isEmpty() ? "" : m_serverStartIPs.first();
+  }
+
+  m_actionStartCore->setVisible(false);
+  m_actionRestartCore->setVisible(true);
+  m_coreProcess.start();
+}
+
+// Runs the core in a mode that was chosen elsewhere than in the mode buttons, starting it or restarting it
+void MainWindow::startCoreAs(CoreMode mode)
+{
+  // saveSettings() copies the buttons and the address to the settings each time the core starts
+  if (mode == CoreMode::Client)
+    ui->lineHostname->setText(Settings::value(Settings::Client::RemoteHost).toString());
+  (mode == CoreMode::Server ? ui->rbModeServer : ui->rbModeClient)->setChecked(true);
+
+  if (m_coreProcess.processState() == ProcessState::Stopped)
+    startCore();
+  else
+    resetCore();
+}
+
+void MainWindow::stopCore()
+{
+  qDebug() << "stopping core process";
+  m_coreProcess.stop();
+  m_actionStartCore->setVisible(true);
+  m_actionRestartCore->setVisible(false);
+}
+
+void MainWindow::clearSettings()
+{
+  qDebug() << "clearing settings";
+
+  m_networkMonitor->stopMonitoring();
+
+  disconnect(&m_coreProcess, nullptr, this, nullptr);
+  disconnect(&m_versionChecker, nullptr, this, nullptr);
+  disconnect(m_guiDupeChecker, nullptr, this, nullptr);
+  disconnect(m_trayIcon, nullptr, this, nullptr);
+  disconnect(m_logDock->toggleViewAction(), nullptr, this, nullptr);
+
+  m_coreProcess.stop();
+  m_coreProcess.clearSettings();
+
+  m_saveOnExit = false;
+  diagnostic::clearSettings(true);
+}
+
+bool MainWindow::saveServerConfig()
+{
+  QString fileName = QFileDialog::getSaveFileName(this, tr("Save server configuration as..."));
+
+  if (!fileName.isEmpty() && !m_serverConfig.save(fileName)) {
+    QMessageBox::warning(this, tr("Save failed"), tr("Could not save server configuration to file."));
+    return true;
+  }
+
+  return false;
+}
+
+void MainWindow::openAboutDialog()
+{
+  AboutDialog about(this);
+  about.exec();
+}
+
+void MainWindow::openGetNewVersionUrl() const
+{
+  QDesktopServices::openUrl(QUrl(kUrlDownload));
+}
+
+void MainWindow::openSettings()
+{
+  auto dialog = SettingsDialog(this, m_serverConfig);
+
+  connect(&dialog, &SettingsDialog::requestRemoveAllSettings, this, &MainWindow::clearSettings, Qt::UniqueConnection);
+  if (dialog.exec() == QDialog::Accepted) {
+    Settings::save();
+    disconnect(&dialog, &SettingsDialog::requestRemoveAllSettings, nullptr, nullptr);
+
+    applyConfig();
+
+    if (m_coreProcess.isStarted()) {
+      m_coreProcess.restart();
+    }
+  }
+}
+
+void MainWindow::resetCore()
+{
+  m_coreProcess.restart();
+}
+
+void MainWindow::showMyFingerprint()
+{
+  FingerprintDialog fingerprintDialog(this, m_fingerprint);
+  fingerprintDialog.exec();
+}
+
+void MainWindow::coreModeToggled(bool checked)
+{
+  // this method is called when rbClient or rbServer toggles
+  // with both being in the same group one must be turned on if the other is turned off
+  // only react to toggle on to avoid calling everything twice when the user switches modes
+  if (!checked)
+    return;
+
+  Settings::CoreMode mode = Settings::CoreMode::None;
+
+  if (ui->rbModeServer->isChecked())
+    mode = Settings::CoreMode::Server;
+  if (ui->rbModeClient->isChecked())
+    mode = Settings::CoreMode::Client;
+
+  qDebug() << QStringLiteral("change mode to: %1").arg(QVariant::fromValue(mode).toString());
+
+  if (m_coreProcess.isStarted() && m_coreProcess.mode() != mode)
+    m_coreProcess.stop();
+  m_coreProcess.setMode(mode);
+
+  Settings::setValue(Settings::Core::CoreMode, mode);
+  Settings::save();
+
+  updateModeControls();
+}
+
+void MainWindow::updateModeControls()
+{
+  const auto mode = m_coreProcess.mode();
+  const bool isServer = mode == Settings::CoreMode::Server;
+  const bool isClient = mode == Settings::CoreMode::Client;
+
+  ui->serverOptions->setVisible(isServer);
+  ui->clientOptions->setVisible(isClient);
+  ui->lblNoMode->setVisible(!isServer && !isClient);
+  toggleCanRunCore(canRunCore());
+
+  ui->lblIpAddresses->setVisible(
+      (isClient && !Settings::value(Settings::Core::Interface).toString().isEmpty()) || isServer
+  );
+
+  if (ui->lblIpAddresses->isVisible())
+    updateNetworkInfo();
+
+  if (isServer) {
+    m_networkMonitor->startMonitoring();
+  } else {
+    m_networkMonitor->stopMonitoring();
+  }
+
+  if (isServer || isClient)
+    updateModeControlLabels();
+}
+
+void MainWindow::updateModeControlLabels()
+{
+  const bool isServer = m_coreProcess.mode() == CoreMode::Server;
+  const bool isStarted = m_coreProcess.isStarted();
+
+  QString startText;
+  QString stopText;
+  QIcon startIcon;
+  QIcon stopIcon;
+
+  if (isServer) {
+    startText = tr("Start");
+    stopText = tr("Stop");
+    startIcon = QIcon::fromTheme(QStringLiteral("system-run"));
+    stopIcon = QIcon::fromTheme(QIcon::ThemeIcon::ProcessStop);
+  } else {
+    startText = tr("Connect");
+    stopText = tr("Disconnect");
+    startIcon = QIcon::fromTheme(QStringLiteral("network-connect"));
+    stopIcon = QIcon::fromTheme(QStringLiteral("network-disconnect"));
+  }
+
+  m_actionStartCore->setText(startText);
+  m_actionStartCore->setIcon(startIcon);
+  m_actionStopCore->setText(stopText);
+  m_actionStopCore->setIcon(stopIcon);
+
+  if (isStarted) {
+    ui->btnToggleCore->setText(stopText);
+    ui->btnToggleCore->setIcon(stopIcon);
+  } else {
+    ui->btnToggleCore->setText(startText);
+    ui->btnToggleCore->setIcon(startIcon);
+  }
+}
+
+void MainWindow::updateSecurityIcon(bool visible)
+{
+  m_statusBar->setSecurityIconVisible(visible);
+  if (!visible)
+    return;
+  m_statusBar->setSecurityIcon(TlsUtility::isEnabled());
+}
+
+void MainWindow::updateNetworkInfo()
+{
+  const auto mode = m_coreProcess.mode();
+  if (mode == CoreMode::None) {
+    return;
+  }
+
+  if (mode == CoreMode::Server)
+    updateIpLabel(NetworkMonitor::validAddresses());
+  else
+    updateIpLabel({Settings::value(Settings::Core::Interface).toString()});
+}
+
+void MainWindow::serverConnectionConfigureClient(const QString &clientName)
+{
+  ServerConfigDialog dialog(this, m_serverConfig);
+  if (dialog.addClient(clientName))
+    execServerConfigDialog(dialog);
+}
+
+// A computer that joined a host takes the next free place in the layout, like a new client that the user accepts. While
+// the layout is being edited it waits, as the dialog would take the place away again when it closes.
+void MainWindow::addClientScreen(const lan::PeerIdentity &client)
+{
+  if (m_clientScreens.submit(client) && placeClientScreen(client) && m_coreProcess.isStarted())
+    resetCore();
+}
+
+// True when the layout changed
+bool MainWindow::placeClientScreen(const lan::PeerIdentity &client)
+{
+  const auto &screens = std::as_const(m_serverConfig).screens();
+  if (lan::ClientScreenQueue::inLayout(screens, client.screenName))
+    return false;
+
+  if (m_serverConfig.useExternalConfig() || m_serverConfig.isFull()) {
+    ui->hostJoinWidget->showError(
+        tr("%1 joined, but could not be added to the screen layout. Add it under Arrange screens.")
+            .arg(client.displayName)
+    );
+    return false;
+  }
+
+  m_serverConfig.addClient(client.screenName);
+  // The core only knows the screens that are in the settings, as the server config dialog saves them
+  for (const auto &screen : screens) {
+    if (screen.isNull())
+      continue;
+    Settings::setValue(Settings::Screen::Aliases.arg(screen.name()), screen.aliases());
+    Settings::setValue(Settings::Screen::Name.arg(screen.name()), screen.name());
+  }
+  Settings::save();
+  return true;
+}
+
+// Runs a dialog that edits the layout. The computers that joined meanwhile are added when it has closed, and the core
+// runs again once for everything that changed. True when the dialog was accepted.
+bool MainWindow::execServerConfigDialog(ServerConfigDialog &dialog)
+{
+  m_serverConfigDialogVisible = true;
+  m_clientScreens.open();
+  const bool accepted = dialog.exec() == QDialog::Accepted;
+  m_serverConfigDialogVisible = false;
+
+  bool changed = accepted;
+  for (const auto &client : m_clientScreens.close(std::as_const(m_serverConfig).screens()))
+    changed = placeClientScreen(client) || changed;
+  if (changed && m_coreProcess.isStarted())
+    m_coreProcess.restart();
+  return accepted;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// End slots
+//////////////////////////////////////////////////////////////////////////////
+
+void MainWindow::open()
+{
+  if (!Settings::value(Settings::Gui::Autohide).toBool())
+    showAndActivate();
+  else if (deskflow::platform::isMac())
+    // macOS to call hide after this function ends
+    QTimer::singleShot(1, this, &MainWindow::hide);
+  else
+    hide();
+
+  // if a critical error was shown just before the main window (i.e. on app
+  // load), it will be hidden behind the main window. therefore we need to raise
+  // it up in front of the main window.
+  // HACK: because the `onShown` event happens just as the window is shown, the
+  // message box has a chance of being raised under the main window. to solve
+  // this we delay the error dialog raise by a split second. this seems a bit
+  // hacky and fragile, so maybe there's a better approach.
+  const auto kCriticalDialogDelay = 100;
+  QTimer::singleShot(kCriticalDialogDelay, this, &messages::raiseCriticalDialog);
+
+  if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
+    if (ui->rbModeClient->isChecked() && ui->lineHostname->text().isEmpty())
+      return;
+    startCore();
+  }
+}
+
+void MainWindow::createMenuBar()
+{
+  m_menuFile->addAction(m_actionStartCore);
+  m_menuFile->addAction(m_actionRestartCore);
+  m_menuFile->addAction(m_actionStopCore);
+  m_menuFile->addSeparator();
+  m_menuFile->addAction(m_actionQuit);
+
+  m_menuEdit->addAction(m_actionSettings);
+
+  m_menuView->addAction(m_logDock->toggleViewAction());
+
+  m_menuHelp->addAction(m_actionAbout);
+
+  auto menuBar = new QMenuBar(this);
+  menuBar->addMenu(m_menuFile);
+  menuBar->addMenu(m_menuEdit);
+  menuBar->addMenu(m_menuView);
+  menuBar->addMenu(m_menuHelp);
+
+  setMenuBar(menuBar);
+}
+
+void MainWindow::setupTrayIcon()
+{
+  auto trayMenu = new QMenu(this);
+  trayMenu->addActions(
+      {m_actionStartCore, m_actionRestartCore, m_actionStopCore, m_actionMinimize, m_actionRestore, m_actionTrayQuit}
+  );
+  trayMenu->insertSeparator(m_actionMinimize);
+  trayMenu->insertSeparator(m_actionTrayQuit);
+  m_trayIcon->setContextMenu(trayMenu);
+
+  setTrayIcon();
+  m_trayIcon->show();
+}
+
+void MainWindow::applyConfig()
+{
+  if (Settings::value(Settings::Gui::ShowVersionInTitle).toBool()) {
+    setWindowTitle(QStringLiteral("%1 - %2").arg(kDisplayName, kDisplayVersion));
+  } else {
+    setWindowTitle(kDisplayName);
+  }
+
+  if (const auto host = Settings::value(Settings::Client::RemoteHost).toString(); !host.isEmpty())
+    ui->lineHostname->setText(host);
+
+  updateFingerprintButton();
+  setTrayIcon();
+
+  if (const auto ip = Settings::value(Settings::Core::Interface).toString(); !ip.isEmpty()) {
+    m_serverStartIPs = {ip};
+    m_serverStartSuggestedIP = ip;
+  }
+
+  coreModeToggled(true);
+}
+
+void MainWindow::saveSettings() const
+{
+  if (ui->rbModeClient->isChecked()) {
+    Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Client);
+  } else if (ui->rbModeServer->isChecked()) {
+    Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Server);
+  }
+  if (!ui->lineHostname->text().isEmpty())
+    Settings::setValue(Settings::Client::RemoteHost, ui->lineHostname->text());
+  Settings::save();
+}
+
+void MainWindow::setTrayIcon()
+{
+  static const auto fallbackPath = QStringLiteral(":/icons/%1-%2/apps/64/%3");
+
+  QString themeIcon = kRevFqdnName;
+  if (!Settings::value(Settings::Gui::SymbolicTrayIcon).toBool()) {
+    if (deskflow::platform::isMac())
+      m_trayIcon->setIcon(QIcon::fromTheme(themeIcon));
+    else
+      m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, QStringLiteral("dark"), themeIcon)));
+    return;
+  }
+
+  themeIcon.append(QStringLiteral("-symbolic"));
+
+  if (deskflow::platform::isWindows()) {
+    QSettings settings(
+        QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
+        QSettings::NativeFormat
+    );
+    const QString theme = settings.value(QStringLiteral("SystemUsesLightTheme"), 1).toBool() ? QStringLiteral("light")
+                                                                                             : QStringLiteral("dark");
+    m_trayIcon->setIcon(QIcon(fallbackPath.arg(kAppId, theme, themeIcon)));
+    return;
+  }
+
+  auto icon = QIcon::fromTheme(themeIcon, QIcon(fallbackPath.arg(kAppId, iconMode(), themeIcon)));
+  icon.setIsMask(true);
+  m_trayIcon->setIcon(icon);
+}
+
+void MainWindow::handleLogLine(const QString &line)
+{
+  m_logDock->appendLine(line);
+}
+
+void MainWindow::handleUnrecognisedClient(const QString &clientName)
+{
+  if (m_ignoredClients.contains(clientName)) {
+    qDebug("ignoring %s:", qPrintable(clientName));
+    return;
+  }
+
+  if (m_newClientPromptShowing || m_serverConfigDialogVisible)
+    return;
+
+  if (Settings::value(Settings::Server::ExternalConfig).toBool())
+    return;
+
+  if (m_serverConfig.isFull() || m_serverConfig.screenExists(clientName))
+    return;
+
+  m_newClientPromptShowing = true;
+
+  showAndActivate();
+
+  if (deskflow::gui::messages::showNewClientPrompt(this, clientName)) {
+    serverConnectionConfigureClient(clientName);
+  } else {
+    m_ignoredClients.insert(clientName);
+  }
+
+  m_newClientPromptShowing = false;
+}
+
+void MainWindow::handleConnectionRefused(deskflow::core::ConnectionRefusal reason)
+{
+  if (reason != deskflow::core::ConnectionRefusal::AlreadyConnected)
+    return;
+
+  if (!isVisible() || m_clientErrorVisible)
+    return;
+
+  m_clientErrorVisible = true;
+  showAndActivate();
+
+  const auto address = Settings::value(Settings::Client::RemoteHost).toString();
+  QMessageBox::warning(
+      this, tr("%1 Connection Error").arg(kDisplayName),
+      tr("<p>Failed to connect to the server '%1'.</p>"
+         "<p>A Client with your name is already connected to the server.</p>"
+         "Please ensure that you're using a unique name and that only a "
+         "single instance of the client process is running.</p>")
+          .arg(address)
+  );
+
+  m_clientErrorVisible = false;
+}
+
+void MainWindow::handleMissingKeyboardLayouts(const QString &layouts)
+{
+  if (Settings::value(Settings::Gui::IgnoreMissingKeyboardLayouts).toBool())
+    return;
+
+  QMessageBox msgBox(this);
+  msgBox.setIcon(QMessageBox::Warning);
+  msgBox.setWindowTitle(tr("Missing Keyboard Layouts"));
+  msgBox.setText(tr("<p>Keyboard layout support requires matching layouts on all computers. "
+                    "The following layouts from the other computer are not installed on this computer:</p>"
+                    "<p><b>%1</b></p>"
+                    "<p>Please install them to enable support for these layouts.</p>")
+                     .arg(layouts));
+
+  auto *checkBox = new QCheckBox(tr("Don't show this again"), &msgBox);
+  msgBox.setCheckBox(checkBox);
+  msgBox.exec();
+
+  if (checkBox->isChecked()) {
+    Settings::setValue(Settings::Gui::IgnoreMissingKeyboardLayouts, true);
+  }
+}
+
+void MainWindow::handlePeerFingerprint(const QString &fingerprint)
+{
+  const auto sha256Text = QString(fingerprint).remove(':');
+  const Fingerprint sha256 = {QCryptographicHash::Sha256, QByteArray::fromHex(sha256Text.toLatin1())};
+
+  const bool isClient = m_coreProcess.mode() == CoreMode::Client;
+  if ((isClient && m_checkedServers.contains(sha256Text)) || (!isClient && m_checkedClients.contains(sha256Text))) {
+    qDebug("ignoring fingerprint, already handled");
+    return;
+  }
+
+  if (TlsUtility::isTrusted(trustedFingerprintDatabase(), sha256)) {
+    qDebug("fingerprint is trusted");
+    return;
+  }
+
+  // Hosting and joining trust by pairing. A prompt would let a computer on the network get past the code by having
+  // the user click yes, so the user is not asked.
+  if (m_lanSession->rejectUntrustedPeer())
+    return;
+
+  if (isClient) {
+    m_checkedServers.append(sha256Text);
+    m_coreProcess.stop();
+  } else {
+    m_checkedClients.append(sha256Text);
+  }
+
+  auto mode = isClient ? FingerprintDialogMode::Client : FingerprintDialogMode::Server;
+  FingerprintDialog fingerprintDialog(this, m_fingerprint, mode, sha256);
+
+  if (fingerprintDialog.exec() == QDialog::Accepted) {
+    if (!TlsUtility::addTrusted(trustedFingerprintDatabase(), sha256)) {
+      qCritical().noquote() << "unable to write fingerprint to db:" << trustedFingerprintDatabase();
+      m_coreProcess.stop();
+      return;
+    }
+    if (isClient) {
+      m_checkedServers.removeAll(sha256Text);
+      m_coreProcess.start();
+    } else {
+      m_checkedClients.removeAll(sha256Text);
+    }
+  }
+}
+
+bool MainWindow::maybeHideToTray()
+{
+  if (!Settings::value(Settings::Gui::CloseToTray).toBool()) {
+    return false;
+  }
+
+  if (Settings::value(Settings::Gui::CloseReminder).toBool()) {
+    messages::showCloseReminder(this);
+    Settings::setValue(Settings::Gui::CloseReminder, false);
+  }
+  Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+  qDebug() << "hiding to tray";
+  hide();
+  return true;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+  if (event->spontaneous() && maybeHideToTray()) {
+    event->ignore();
+    return;
+  }
+
+  if (m_saveOnExit) {
+    Settings::setValue(Settings::Gui::WindowGeometry, geometry());
+    Settings::setValue(Settings::Gui::AutoStartCore, m_coreProcess.isStarted());
+  }
+  qDebug() << "quitting application";
+
+  // any connected dock view acitons will be triggered
+  // disconnect them before accepting the event
+  disconnect(m_logDock->toggleViewAction(), &QAction::toggled, nullptr, nullptr);
+
+  event->accept();
+  QApplication::quit();
+}
+
+void MainWindow::showFirstConnectedMessage()
+{
+  if (Settings::value(Settings::Gui::ShownFirstConnectedMessage).toBool())
+    return;
+  Settings::setValue(Settings::Gui::ShownFirstConnectedMessage, true);
+  messages::showFirstConnectedMessage(this);
+}
+
+void MainWindow::updateStatus()
+{
+  using enum ProcessState;
+  const auto connection = m_coreProcess.connectionState();
+  const auto process = m_coreProcess.processState();
+  const bool isServer = (m_coreProcess.mode() == CoreMode::Server);
+  if (process == Stopped || process == Started) {
+    updateNetworkInfo();
+    ui->btnEditName->setVisible(process == Stopped);
+  }
+  m_statusBar->setStatus(connection, process, isServer);
+}
+
+void MainWindow::coreProcessStateChanged(ProcessState state)
+{
+  using enum ProcessState;
+  updateStatus();
+  if (state == Started) {
+    qDebug() << "recording that core has started";
+    Settings::setValue(Settings::Gui::AutoStartCore, true);
+    // The message says a prompt will show for a new client, but computers join a host with its code
+    if (m_coreProcess.mode() == CoreMode::Server && !m_lanSession->isHosting() &&
+        !Settings::value(Settings::Gui::ShownServerFirstStartMessage).toBool()) {
+      qDebug() << "starting core server for first time";
+      messages::showFirstServerStartMessage(this);
+      Settings::setValue(Settings::Gui::ShownServerFirstStartMessage, true);
+    }
+  }
+
+  if (state == Started || state == Starting || state == RetryPending) {
+    disconnect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger);
+    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStopCore, &QAction::trigger, Qt::UniqueConnection);
+
+    ui->btnRestartCore->setEnabled(true);
+    m_actionStartCore->setVisible(false);
+    m_actionRestartCore->setVisible(true);
+    m_actionStopCore->setEnabled(true);
+
+    if (state == Starting) {
+      saveSettings();
+    }
+
+  } else {
+    disconnect(ui->btnToggleCore, &QPushButton::clicked, m_actionStopCore, &QAction::trigger);
+    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger, Qt::UniqueConnection);
+
+    ui->btnRestartCore->setEnabled(false);
+    m_actionStartCore->setVisible(true);
+    m_actionRestartCore->setVisible(false);
+    m_actionStopCore->setEnabled(false);
+  }
+  updateModeControlLabels();
+}
+
+void MainWindow::coreConnectionStateChanged(ConnectionState state)
+{
+  qDebug() << "core connection state changed:" << static_cast<int>(state);
+
+  updateStatus();
+
+  // always assume connection is not secure when connection changes
+  // to anything except connected. the only way the padlock shows is
+  // when the correct TLS version string is detected.
+  if (state != ConnectionState::Connected) {
+    secureSocket(false);
+  } else if (isVisible()) {
+    showFirstConnectedMessage();
+  }
+}
+
+void MainWindow::updateFingerprintButton()
+{
+  m_statusBar->setBtnFingerprintVisible(TlsUtility::isEnabled() && !m_fingerprint.data.isEmpty());
+}
+
+void MainWindow::hide()
+{
+#ifdef Q_OS_MACOS
+  macOSNativeHide();
+#else
+  QMainWindow::hide();
+#endif
+  m_actionRestore->setVisible(true);
+  m_actionMinimize->setVisible(false);
+}
+
+void MainWindow::changeEvent(QEvent *e)
+{
+  QMainWindow::changeEvent(e);
+  if (e->type() == QEvent::PaletteChange) {
+    updateIconTheme();
+    setWindowIcon(QIcon::fromTheme(kRevFqdnName));
+    setTrayIcon();
+  } else if (e->type() == QEvent::LanguageChange) {
+    ui->retranslateUi(this);
+    updateModeControlLabels();
+    updateNetworkInfo();
+    updateStatus();
+    serverClientsChanged({});
+    updateText();
+  }
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+  if (obj != ui->lineEditName || event->type() != QEvent::KeyPress)
+    return false;
+  if (const auto keyEvent = static_cast<QKeyEvent *>(event); keyEvent->key() != Qt::Key_Escape)
+    return false;
+  ui->lineEditName->hide();
+  ui->lblComputerName->show();
+  ui->btnEditName->show();
+  ui->lineEditName->setText(Settings::value(Settings::Core::ComputerName).toString());
+  toggleCanRunCore(canRunCore());
+  return true;
+}
+
+void MainWindow::updateText()
+{
+  m_menuFile->setTitle(tr("&File"));
+  m_menuEdit->setTitle(tr("&Edit"));
+  m_menuView->setTitle(tr("&View"));
+  m_menuHelp->setTitle(tr("&Help"));
+
+  m_actionMinimize->setText(tr("&Minimize to tray"));
+  m_actionQuit->setText(tr("&Quit"));
+  m_actionTrayQuit->setText(tr("&Quit"));
+  //: %1 will be the replaced with the appname
+  m_actionRestore->setText(tr("&Open %1").arg(kDisplayName));
+  m_actionSettings->setText(tr("&Preferences"));
+  m_actionStartCore->setText(tr("&Start"));
+  m_actionRestartCore->setText(tr("Rest&art"));
+  m_actionStopCore->setText(tr("S&top"));
+  //: %1 will be the replaced with the appname
+  m_actionAbout->setText(tr("About %1...").arg(kDisplayName));
+
+  m_actionShowHelp->setText(tr("View &Help"));
+
+  //: start / restart core shortcut
+  m_actionStartCore->setShortcut(QKeySequence(tr("Ctrl+S")));
+  m_actionRestartCore->setShortcut(QKeySequence(tr("Ctrl+S")));
+
+  //: stop core shortcut
+  m_actionStopCore->setShortcut(QKeySequence(tr("Ctrl+T")));
+
+  if (deskflow::platform::isWindows()) {
+    //: Quit shortcut
+    m_actionQuit->setShortcut(QKeySequence(tr("Ctrl+Q")));
+    m_actionTrayQuit->setShortcut(QKeySequence(tr("Ctrl+Q")));
+  }
+}
+
+void MainWindow::showConfigureServer(const QString &message)
+{
+  ServerConfigDialog dialog(this, serverConfig());
+  dialog.message(message);
+  execServerConfigDialog(dialog);
+}
+
+void MainWindow::showConfigureClient()
+{
+  ClientConfigDialog dialog(this);
+  if ((dialog.exec() == QDialog::Accepted) && m_coreProcess.isStarted()) {
+    m_coreProcess.restart();
+  }
+}
+
+void MainWindow::secureSocket(bool secureSocket)
+{
+  m_secureSocket = secureSocket;
+  updateSecurityIcon(m_statusBar->securityIconVisible());
+}
+
+void MainWindow::updateScreenName()
+{
+  const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
+  ui->lblComputerName->setText(screenName);
+  ui->lineEditName->setText(screenName);
+  m_serverConfig.updateServerName();
+}
+
+void MainWindow::showAndActivate()
+{
+  const auto wasVisible = isVisible();
+#ifdef Q_OS_MACOS
+  forceAppActive();
+#endif
+  showNormal();
+  raise();
+  activateWindow();
+  m_actionRestore->setVisible(false);
+  m_actionMinimize->setVisible(true);
+  if (!wasVisible)
+    restoreWindow();
+}
+
+void MainWindow::showHostNameEditor()
+{
+  ui->lineEditName->show();
+  ui->lblComputerName->hide();
+  ui->btnEditName->hide();
+  toggleCanRunCore(false);
+  ui->lineEditName->setFocus();
+}
+
+void MainWindow::setHostName()
+{
+  ui->lineEditName->hide();
+  ui->lblComputerName->show();
+  ui->btnEditName->show();
+  toggleCanRunCore(canRunCore());
+
+  QString text = ui->lineEditName->text();
+  const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
+
+  if (text == screenName)
+    return;
+
+  const bool isServer = ui->rbModeServer->isChecked();
+  bool existingScreen = false;
+  if (isServer)
+    existingScreen = serverConfig().screenExists(text);
+
+  if (!ui->lineEditName->hasAcceptableInput() || text.isEmpty() || existingScreen) {
+    blockSignals(true);
+    ui->lineEditName->setText(screenName);
+    blockSignals(false);
+
+    const auto title = tr("Invalid Screen Name");
+    QString body;
+    if (existingScreen) {
+      body = tr("Screen name already exists");
+    } else {
+      body =
+          tr("The name you have chosen is invalid.\n\n"
+             "Valid names:\n"
+             "• Use letters and numbers\n"
+             "• May also use _ or -\n"
+             "• Are between 1 and 255 characters");
+    }
+    QMessageBox::information(this, title, body);
+    return;
+  }
+
+  ui->lblComputerName->setText(ui->lineEditName->text());
+  Settings::setValue(Settings::Core::ComputerName, ui->lineEditName->text());
+  if (isServer)
+    serverConfig().updateServerName();
+  applyConfig();
+}
+
+QString MainWindow::trustedFingerprintDatabase() const
+{
+  const bool isClient = m_coreProcess.mode() == CoreMode::Client;
+  return isClient ? Settings::tlsTrustedServersDb() : Settings::tlsTrustedClientsDb();
+}
+
+void MainWindow::updateFingerprint(bool replaceInvalidCert)
+{
+  m_fingerprint = {QCryptographicHash::Sha256, TlsUtility::ensureCertificate(replaceInvalidCert)};
+  updateFingerprintButton();
+}
+
+void MainWindow::serverClientsChanged(const QStringList &clients)
+{
+  if (m_coreProcess.mode() != CoreMode::Server || !m_coreProcess.isStarted())
+    return;
+  m_statusBar->setServerClients(clients);
+}
+
+void MainWindow::daemonIpcClientConnectionFailed()
+{
+  if (deskflow::gui::messages::showDaemonOffline(this)) {
+    m_coreProcess.retryDaemon();
+  }
+}
+
+void MainWindow::toggleCanRunCore(bool enableButtons)
+{
+  const bool isStarted = m_coreProcess.isStarted();
+  ui->btnToggleCore->setEnabled(enableButtons);
+  ui->btnRestartCore->setEnabled(enableButtons && isStarted);
+  m_actionStartCore->setEnabled(enableButtons);
+  m_actionStopCore->setEnabled(enableButtons && isStarted);
+}
+
+void MainWindow::remoteHostChanged(const QString &newRemoteHost)
+{
+  m_coreProcess.setAddress(newRemoteHost);
+  toggleCanRunCore(!newRemoteHost.isEmpty() && ui->rbModeClient->isChecked());
+  if (newRemoteHost.isEmpty()) {
+    Settings::setValue(Settings::Client::RemoteHost);
+  } else {
+    Settings::setValue(Settings::Client::RemoteHost, newRemoteHost);
+  }
+}
+
+void MainWindow::updateIpLabel(const QStringList &addresses)
+{
+  const auto mode = m_coreProcess.mode();
+  if (mode == CoreMode::None) {
+    return;
+  }
+
+  static const auto colorText = QStringLiteral(R"(<span style="color:%1;">%2</span>)");
+  const bool serverStarted = m_coreProcess.isStarted();
+  const bool fixedIP = !Settings::value(Settings::Core::Interface).toString().isEmpty();
+
+  if ((!fixedIP && addresses.isEmpty() && !serverStarted) || (serverStarted && m_serverStartSuggestedIP.isEmpty())) {
+    ui->lblIpAddresses->setText(colorText.arg(palette().linkVisited().color().name(), tr("No IP Detected")));
+    ui->lblIpAddresses->setToolTip(tr("Unable to detect an IP address. Check your network connection is active."));
+    return;
+  }
+
+  QString labelText = fixedIP ? tr("Using IP: ") : tr("Suggested IP: ");
+  QString toolTipText = tr("<p>If connecting via the hostname fails, try %1</p>");
+
+  const bool filterIpList = (serverStarted || fixedIP);
+  const QRegularExpression ipListFilter(filterIpList ? QStringLiteral("(%1)").arg(m_serverStartIPs.join("|")) : "");
+  const QStringList ipList = addresses.filter(ipListFilter);
+
+  bool IPValid = true;
+  if ((filterIpList && (m_serverStartSuggestedIP != m_currentIpAddress)) ||
+      !ipList.contains(m_serverStartSuggestedIP)) {
+    IPValid = !ipList.isEmpty();
+  }
+
+  if (IPValid) {
+    m_currentIpAddress = ipList.first();
+    labelText.append(m_currentIpAddress);
+  } else {
+    labelText.append(colorText.arg(palette().linkVisited().color().name(), m_serverStartSuggestedIP));
+    toolTipText.append(tr("\nA bound IP is now invalid, you may need to restart the server."));
+  }
+
+  if (ipList.count() < 2 || fixedIP) {
+    toolTipText = toolTipText.arg(tr("the suggested IP."));
+  } else {
+    toolTipText = toolTipText.arg(tr("one of the following IPs:<br/>%1").arg(ipList.join("<br/>")));
+  }
+
+  ui->lblIpAddresses->setText(labelText);
+  ui->lblIpAddresses->setToolTip(mode == CoreMode::Server ? toolTipText : QString());
+}
+
+void MainWindow::updateTimeoutDelay(int newDelay)
+{
+  m_statusBar->setConnectionInterval(newDelay);
+}
+
+void MainWindow::setHelpFilePath()
+{
+  const QString appPath = QCoreApplication::applicationDirPath();
+  auto buildPath = QString("%1/../docs/HelpMain.md").arg(appPath);
+  auto installPath = QString("%1/../share/doc/%2/HelpMain.md").arg(appPath, kAppId);
+  if (deskflow::platform::isMac()) {
+    installPath = QString("%1/../Resources/docs/HelpMain.md").arg(appPath);
+    buildPath = QString("%1/../../../../docs/HelpMain.md").arg(appPath);
+  } else if (deskflow::platform::isWindows()) {
+    installPath = QString("%1/docs/HelpMain.md").arg(appPath);
+  }
+
+  buildPath = QDir::cleanPath(buildPath);
+  installPath = QDir::cleanPath(installPath);
+
+  if (QFile::exists(installPath))
+    m_helpPath = QUrl::fromLocalFile(installPath);
+  else if (QFile::exists(buildPath))
+    m_helpPath = QUrl::fromLocalFile(buildPath);
+  else
+    m_helpPath = kUrlWiki;
+}
+
+void MainWindow::showHelpViewer() const
+{
+  if (m_helpPath.isLocalFile()) {
+    HelpDialog dialogHelp(this->centralWidget(), m_helpPath);
+    dialogHelp.exec();
+  } else {
+    QDesktopServices::openUrl(m_helpPath);
+  }
+}
+
+bool MainWindow::canRunCore() const
+{
+  const auto mode = m_coreProcess.mode();
+  const bool isServer = mode == Settings::CoreMode::Server;
+  const bool isClient = mode == Settings::CoreMode::Client;
+  return (((isServer || isClient) && (isClient && !ui->lineHostname->text().isEmpty())) || isServer);
+}

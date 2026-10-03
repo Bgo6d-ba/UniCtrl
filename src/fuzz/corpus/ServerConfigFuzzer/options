@@ -1,0 +1,17 @@
+section: options
+  heartbeat = 5000
+  switchDelay = 250
+  switchCorners = top-left +bottom-right
+  switchCornerSize = 5
+  keystroke(Control+Alt+Right) = switchInDirection(right)
+  keystroke(Control+1) = switchToScreen(b1)
+  keystroke(Control+2) = switchToNextScreen
+  keystroke(Control+3) = lockCursorToScreen(on)
+  keystroke(Control+4) = keyboardBroadcast(toggle,alpha:beta)
+  keystroke(Control+5) = keystroke(Alt+F4,beta), mouseDown(Shift+1) ; mouseUp(Shift+1)
+  keystroke(Control+6) = keyDown(a) ; keyUp(a)
+  keystroke(Control+7) = mousebutton(2)
+  keystroke(Control+8) = restartServer(restart)
+  mousebutton(Shift+3) = switchToScreen(gamma)
+  connect(b1) = switchToScreen(gamma)
+end

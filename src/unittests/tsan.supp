@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
+# SPDX-License-Identifier: MIT
+
+# ThreadSanitizer suppressions for the unit tests. Qt isn't built with TSan, so the joins and
+# futex waits that order its own threads are invisible and its internals report false races.
+
+# The QtTest watchdog thread's condition variable (memset/pthread_cond_wait called straight from
+# libQt6Test, which has no symbols to match on). Only interceptors QtTest itself calls are
+# ignored; a race in test code still reports, whatever its stack unwinds through.
+called_from_lib:libQt6Test.so
+# QThread::wait()'s wait condition, signalled under a QMutex (futex) TSan can't see
+race:QWaitCondition::

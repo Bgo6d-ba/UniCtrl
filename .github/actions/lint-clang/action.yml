@@ -1,0 +1,85 @@
+name: "Lint Clang"
+description: "Checks for Clang lint errors and posts a helpful comment"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Dependencies
+      run: pipx install --global clang-format==20.1.0
+      shell: bash
+
+    - name: Run format command
+      run: find src/ -regex '.*\.\(cpp\|hpp\|cc\|cxx\|h\|c\|m\|mm\)' -exec clang-format -i {} \;
+      shell: bash
+
+    - name: Find changes
+      id: changes
+      run: |
+        file=clang-format.diff
+        git diff > "$file"
+
+        if [ ! -s "$file" ]; then
+          echo "No changes detected"
+          exit 0
+        fi
+
+        echo "file=$file" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - name: Upload to GitHub
+      id: upload
+      if: steps.changes.outputs.file
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: clang-format-diff
+        path: ${{ steps.changes.outputs.file }}
+        if-no-files-found: error
+
+    # The diff is PR content, so it is copied from the file and never expanded by the shell
+    - name: Set summary
+      id: summary
+      if: steps.changes.outputs.file
+      env:
+        DIFF_FILE: ${{ steps.changes.outputs.file }}
+        ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+      run: |
+        fence='```'
+        clang_version=$(clang-format --version | sed -n 's/^.*version //p')
+
+        summary=summary.md
+        {
+          echo "❌ \`clang-format\` \`v${clang_version}\`: It looks like your changes don't match our code style."
+          echo
+          echo "🛠️ Please either run \`clang-format -i\` on the file or apply this patch with \`git apply\`:"
+          echo
+          echo "[\`${DIFF_FILE}\`](${ARTIFACT_URL})"
+          echo "$fence diff"
+          cat "$DIFF_FILE"
+          echo "$fence"
+          echo
+          echo "Hint: Install the right version of \`clang-format\`, e.g.: \`pipx install --global clang-format==${clang_version}\`"
+        } > "$summary"
+        cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+
+        file="ci-summary.md"
+        {
+          echo "### Lint result"
+          echo
+          cat "$summary"
+        } > "$file"
+        cat "$file"
+        echo "file=$file" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - name: Upload CI summary as artifact
+      if: steps.summary.outputs.file
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: summary-clang-format
+        path: ${{ steps.summary.outputs.file }}
+        if-no-files-found: error
+
+    - name: Fail if diff exists
+      if: steps.changes.outputs.file
+      run: exit 1
+      shell: bash

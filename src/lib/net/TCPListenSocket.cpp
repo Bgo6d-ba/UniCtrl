@@ -1,0 +1,156 @@
+/*
+ * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2012 - 2016 Synergy App Ltd
+ * SPDX-FileCopyrightText: (C) 2002 Chris Schoeneman
+ * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
+ */
+
+#include "net/TCPListenSocket.h"
+
+#include "arch/Arch.h"
+#include "arch/ArchException.h"
+#include "base/IEventQueue.h"
+#include "base/Log.h"
+#include "io/IOException.h"
+#include "net/NetworkAddress.h"
+#include "net/SocketException.h"
+#include "net/SocketMultiplexer.h"
+#include "net/TCPSocket.h"
+#include "net/TSocketMultiplexerMethodJob.h"
+
+//
+// TCPListenSocket
+//
+
+TCPListenSocket::TCPListenSocket(
+    IEventQueue *events, SocketMultiplexer *socketMultiplexer, IArchNetwork::AddressFamily family
+)
+    : m_events(events),
+      m_socketMultiplexer(socketMultiplexer)
+{
+  try {
+    m_socket = ARCH->newSocket(family, IArchNetwork::SocketType::Stream);
+  } catch (ArchNetworkException &e) {
+    throw SocketCreateException(e.what());
+  }
+}
+
+TCPListenSocket::~TCPListenSocket()
+{
+  try {
+    if (m_socket != nullptr) {
+      m_socketMultiplexer->removeSocket(this);
+      ARCH->closeSocket(m_socket);
+    }
+  } catch (...) {
+    // ignore
+    LOG_WARN("error while closing TCP socket");
+  }
+}
+
+void TCPListenSocket::bind(const NetworkAddress &addr)
+{
+  LOG_DEBUG("binding to address: %s:%d", addr.getHostname().c_str(), addr.getPort());
+  try {
+    std::scoped_lock lock{m_mutex};
+
+#if defined(Q_OS_UNIX)
+    // Only reuse socket addr on Unix so we can restart the server quickly (Unix holds the port
+    // in TIME_WAIT for a few mins after close). This is not needed on Windows and can cause issues
+    // because binding to a re-use port makes it look like the server is listening when it is not.
+    ARCH->setReuseAddrOnSocket(m_socket, true);
+#endif
+
+    ARCH->bindSocket(m_socket, addr.getAddress());
+    ARCH->listenOnSocket(m_socket);
+    m_socketMultiplexer->addSocket(
+        this, new TSocketMultiplexerMethodJob<TCPListenSocket>(
+                  this, &TCPListenSocket::serviceListening, m_socket, true, false
+              )
+    );
+  } catch (ArchNetworkAddressInUseException &e) {
+    throw SocketAddressInUseException(e.what());
+  } catch (ArchNetworkException &e) {
+    throw SocketBindException(e.what());
+  }
+}
+
+void TCPListenSocket::close()
+{
+  std::scoped_lock lock{m_mutex};
+  if (m_socket == nullptr) {
+    throw IOClosedException();
+  }
+  try {
+    m_socketMultiplexer->removeSocket(this);
+    ARCH->closeSocket(m_socket);
+    m_socket = nullptr;
+  } catch (ArchNetworkException &e) {
+    throw SocketIOCloseException(e.what());
+  }
+}
+
+void *TCPListenSocket::getEventTarget() const
+{
+  return const_cast<void *>(static_cast<const void *>(this));
+}
+
+std::unique_ptr<IDataSocket> TCPListenSocket::accept()
+{
+  std::unique_ptr<IDataSocket> socket;
+  try {
+    std::string peer;
+    if (auto accepted = acceptPeer(peer); accepted != nullptr) {
+      std::unique_ptr<TCPSocket> tcpSocket;
+      try {
+        tcpSocket = std::make_unique<TCPSocket>(m_events, m_socketMultiplexer, accepted);
+      } catch (...) {
+        ARCH->closeSocket(accepted);
+        throw;
+      }
+      tcpSocket->setPeerAddress(peer);
+      tcpSocket->refreshJob();
+      socket = std::move(tcpSocket);
+    }
+  } catch (const std::exception &e) {
+    LOG_WARN("failed to accept connection: %s", e.what());
+  }
+  // serviceListening() dropped the job, so a missed re-arm would stop the server accepting forever
+  setListeningJob();
+  return socket;
+}
+
+ArchSocket TCPListenSocket::acceptPeer(std::string &peer) const
+{
+  ArchNetAddress address = nullptr;
+  ArchSocket accepted = ARCH->acceptSocket(m_socket, &address);
+  if (address != nullptr) {
+    peer = ARCH->addrToString(address);
+    ARCH->closeAddr(address);
+  }
+  return accepted;
+}
+
+void TCPListenSocket::setListeningJob()
+{
+  m_socketMultiplexer->addSocket(
+      this,
+      new TSocketMultiplexerMethodJob<TCPListenSocket>(this, &TCPListenSocket::serviceListening, m_socket, true, false)
+  );
+}
+
+ISocketMultiplexerJob *TCPListenSocket::serviceListening(ISocketMultiplexerJob *job, bool read, bool, bool error)
+{
+  if (error) {
+    // this runs on the multiplexer thread, which holds its job list, so close() would deadlock
+    LOG_ERR("listening socket failed");
+    m_events->addEvent(Event(EventTypes::ListenSocketError, this));
+    return nullptr;
+  }
+  if (read) {
+    m_events->addEvent(Event(EventTypes::ListenSocketConnecting, this));
+    // stop polling on this socket until the client accepts
+    return nullptr;
+  }
+  return job;
+}

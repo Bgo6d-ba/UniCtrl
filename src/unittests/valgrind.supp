@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
+# SPDX-License-Identifier: MIT
+
+# Memcheck suppressions for the unit tests (valgrind-analysis workflow).
+
+# PCRE2's JIT (behind QRegularExpression) reads words past the end of strings on purpose
+{
+   pcre2-jit
+   Memcheck:Cond
+   obj:*/libpcre2-16.so*
+}

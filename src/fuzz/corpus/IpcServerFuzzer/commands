@@ -1,0 +1,3 @@
+stop
+logLevel=DEBUG
+configFile=/tmp/a=b.conf
