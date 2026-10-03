@@ -76,7 +76,7 @@ add_subdirectory(server)
 
 include(${CMAKE_SOURCE_DIR}/cmake/CheckLayering.cmake)
 if(NOT WIN32)
-  set(layering_optional deskflow-daemon)
+  set(layering_optional unictrl-daemon)
 endif()
 layering_write_links(${CMAKE_CURRENT_BINARY_DIR}/LayeringLinks.cmake ${layering_optional})
 add_test(

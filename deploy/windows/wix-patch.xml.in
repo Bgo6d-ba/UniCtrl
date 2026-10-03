@@ -1,5 +1,5 @@
 <CPackWiXPatch>
-  <CPackWiXFragment Id="CM_CP_deskflow_daemon.exe">
+  <CPackWiXFragment Id="CM_CP_unictrl_daemon.exe">
     <ServiceInstall
       Id="ServiceInstall"
       Name="Deskflow"
@@ -17,7 +17,7 @@
       />
     </ServiceInstall>
     <ServiceControl Id="ServiceControl" Name="Deskflow" Remove="uninstall" Start="install" Stop="both"/>
-    <RemoveFile Id="RmOldLog" On="install" Name="deskflow-daemon.log"/>
+    <RemoveFile Id="RmOldLog" On="install" Name="unictrl-daemon.log"/>
     <!--
       The daemon runs as SYSTEM and logs here, and an admin may deploy Deskflow.conf here, so users may
       only read. The daemon re-applies this at startup (src/lib/common/FileTrust.cpp, kSystemDirSddl).
@@ -27,7 +27,7 @@
     </CreateFolder>
   </CPackWiXFragment>
 
-  <CPackWiXFragment Id="CM_CP_deskflow_core.exe">
+  <CPackWiXFragment Id="CM_CP_unictrl_core.exe">
     <firewall:FirewallException Id="ServerFirewallException" Name="Deskflow Server" Program="[INSTALL_ROOT]unictrl-core.exe" Scope="any"/>
     <firewall:FirewallException Id="ClientFirewallException" Name="Deskflow Client" Program="[INSTALL_ROOT]unictrl-core.exe" Scope="any"/>
   </CPackWiXFragment>

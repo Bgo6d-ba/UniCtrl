@@ -16,7 +16,7 @@ install(FILES ${MY_DIR}/io.github.batmunkh0612.unictrl.png DESTINATION ${CMAKE_I
 
 # Install our symbolic icon
 install(
-  FILES ${CMAKE_SOURCE_DIR}/src/apps/res/icons/deskflow-light/apps/64/io.github.batmunkh0612.unictrl-symbolic.svg
+  FILES ${CMAKE_SOURCE_DIR}/src/apps/res/icons/unictrl-light/apps/64/io.github.batmunkh0612.unictrl-symbolic.svg
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/symbolic/apps/
 )
 

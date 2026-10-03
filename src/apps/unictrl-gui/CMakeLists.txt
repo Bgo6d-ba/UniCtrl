@@ -38,12 +38,12 @@ endif()
 add_executable(${target} WIN32 MACOSX_BUNDLE
   ${platform_extra}
   ../res/deskflow.qrc
-  deskflow-gui.cpp
+  unictrl-gui.cpp
 )
 
 target_link_libraries(${target} gui)
 # the component name used by docs/dev/architecture.md
-add_executable(deskflow-gui ALIAS ${target})
+add_executable(unictrl-gui ALIAS ${target})
 
 install(
   TARGETS ${target}

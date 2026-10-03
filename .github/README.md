@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="UniCtrl" src="../src/apps/res/icons/deskflow-dark/apps/64/io.github.batmunkh0612.unictrl.svg" width="96">
+  <img alt="UniCtrl" src="../src/apps/res/icons/unictrl-dark/apps/64/io.github.batmunkh0612.unictrl.svg" width="96">
 </p>
 
 <h1 align="center">UniCtrl</h1>
@@ -59,7 +59,7 @@ More options are listed in [docs/dev/build.md](../docs/dev/build.md).
 
 | Path | Purpose |
 | --- | --- |
-| `src/apps/deskflow-gui` | the GUI application |
+| `src/apps/unictrl-gui` | the GUI application |
 | `src/apps/unictrl-core` | headless server and client |
 | `src/lib/gui` | windows, theme, host/join widgets, LAN session |
 | `src/lib/server`, `src/lib/client` | input sharing logic |

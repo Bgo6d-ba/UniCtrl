@@ -48,5 +48,5 @@ if(WIN32)
 endif()
 
 add_subdirectory(unictrl-core)
-add_subdirectory(deskflow-daemon) #Only used on windows
-add_subdirectory(deskflow-gui)
+add_subdirectory(unictrl-daemon) #Only used on windows
+add_subdirectory(unictrl-gui)
