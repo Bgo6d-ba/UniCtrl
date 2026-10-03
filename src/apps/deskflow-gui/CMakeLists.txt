@@ -5,7 +5,7 @@
 if(APPLE)
   set(target UniCtrl)
 else()
-  set(target deskflow)
+  set(target unictrl)
 endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
