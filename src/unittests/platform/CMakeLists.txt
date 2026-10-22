@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: (C) 2025 Deskflow Developers
+# SPDX-FileCopyrightText: (C) 2025 - 2026 Deskflow Developers
 # SPDX-License-Identifier: MIT
 
 create_test(
@@ -41,6 +41,14 @@ elseif(APPLE)
   endif()
 elseif(UNIX)
   if(LIBEI_FOUND)
+    create_test(
+      NAME EiHotKeyModifierMatchingTests
+      DEPENDS platform
+      LIBS base arch
+      SOURCE EiHotKeyModifierMatchingTests.cpp
+      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+    )
+
     create_test(
       NAME EiKeyStateTests
       DEPENDS platform
