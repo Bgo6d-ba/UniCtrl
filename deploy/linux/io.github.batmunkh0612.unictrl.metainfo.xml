@@ -46,6 +46,12 @@
 	</branding>
 	<content_rating type="oars-1.0" />
 	<releases>
+		<release version="1.1.0" date="2026-11-01">
+			<description>
+				<p>Sync with upstream Deskflow fixes up to 2026-10-27, and a macOS DMG that bundles QtSvg.</p>
+			</description>
+			<url>https://github.com/Bgo6d-ba/UniCtrl/releases/tag/v1.1.0</url>
+		</release>
 		<release version="1.0.0" date="2026-10-03">
 			<description>
 				<p>First release of UniCtrl, a Deskflow fork with Host/Join pairing and a new interface.</p>
