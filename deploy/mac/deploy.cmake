@@ -13,6 +13,13 @@ if (OSX_BUNDLE)
   if (APPLE_CODESIGN_DEV)
     set(_codesign_identity "${APPLE_CODESIGN_DEV}")
   endif()
+  # Homebrew ships each Qt module in its own keg, so macdeployqt cannot resolve the svg plugins' QtSvg;
+  # it does search the bundle's Frameworks, so put QtSvg there first
+  find_path(_qtsvg_libdir QtSvg.framework PATHS /opt/homebrew/opt/qtsvg/lib /usr/local/opt/qtsvg/lib NO_DEFAULT_PATH)
+  if (_qtsvg_libdir)
+    install(CODE "file(COPY \"${_qtsvg_libdir}/QtSvg.framework\"
+      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app/Contents/Frameworks\" PATTERN Headers EXCLUDE)")
+  endif()
   install(CODE "execute_process(COMMAND
     ${DEPLOYQT}
     \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
