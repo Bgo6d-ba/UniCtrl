@@ -126,6 +126,10 @@ private:
 
   void onMediaKey(CGEventRef event);
 
+  // A three-finger trackpad swipe that macOS would turn into Mission Control or a space change.
+  void onDockSwipe(CGEventRef event);
+  void sendControlShortcut(CGKeyCode key);
+
   bool onHotKey(EventRef event) const;
 
   // Added here to allow the carbon cursor hack to be called.

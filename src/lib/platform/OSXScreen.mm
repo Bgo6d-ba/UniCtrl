@@ -26,6 +26,7 @@
 #include "mt/Mutex.h"
 #include "mt/Thread.h"
 #include "platform/OSXClipboard.h"
+#include "platform/OSXDockSwipe.h"
 #include "platform/OSXEventQueueBuffer.h"
 #include "platform/OSXKeyState.h"
 #include "platform/OSXMediaKeySupport.h"
@@ -1534,6 +1535,40 @@ bool OSXScreen::HotKeyItem::operator<(const HotKeyItem &x) const
   return (m_keycode < x.m_keycode || (m_keycode == x.m_keycode && m_mask < x.m_mask));
 }
 
+void OSXScreen::onDockSwipe(CGEventRef event)
+{
+  const auto key = dockSwipeShortcut(
+      CGEventGetIntegerValueField(event, kGestureHIDTypeField), CGEventGetIntegerValueField(event, kGesturePhaseField),
+      CGEventGetIntegerValueField(event, kGestureSwipeMotionField),
+      CGEventGetDoubleValueField(event, kGestureSwipeProgressField)
+  );
+  if (!key)
+    return;
+
+  // the client acts on the default macOS shortcuts for what the swipe does locally
+  LOG_DEBUG("forwarding trackpad swipe as control+arrow key %d", *key);
+  sendControlShortcut(*key);
+}
+
+void OSXScreen::sendControlShortcut(CGKeyCode key)
+{
+  const auto heldFlags = CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
+  const auto withControl = heldFlags | kCGEventFlagMaskControl;
+
+  const auto post = [this](CGKeyCode code, bool down, CGEventType type, CGEventFlags flags) {
+    CGEventRef synthetic = CGEventCreateKeyboardEvent(nullptr, code, down);
+    CGEventSetType(synthetic, type);
+    CGEventSetFlags(synthetic, flags);
+    onKey(synthetic);
+    CFRelease(synthetic);
+  };
+
+  post(kVK_Control, true, kCGEventFlagsChanged, withControl);
+  post(key, true, kCGEventKeyDown, withControl);
+  post(key, false, kCGEventKeyUp, withControl);
+  post(kVK_Control, false, kCGEventFlagsChanged, heldFlags);
+}
+
 // Quartz event tap support for the secondary display. This makes sure that we
 // will show the cursor if a local event comes in while deskflow has the cursor
 // off the screen.
@@ -1616,6 +1651,11 @@ CGEventRef OSXScreen::handleCGInputEvent(CGEventTapProxy proxy, CGEventType type
       break;
     }
 
+    if (type == kDockControlEventType && !screen->m_isOnScreen) {
+      // dropping it below keeps macOS from acting on the swipe locally
+      screen->onDockSwipe(event);
+      break;
+    }
     LOG_VERBOSE("unknown quartz event type: 0x%02x", type);
   }
 
