@@ -68,6 +68,8 @@ export const DeskClutter: React.FC<{f: number}> = ({f}) => {
           <stop offset="1" stopColor={C.emerald} stopOpacity={0} />
         </radialGradient>
       </defs>
+      {/* the picture is the hero of the hook: scaled up 1.15x, top at y 330 */}
+      <g transform="translate(540 330) scale(1.15) translate(-540 -300)">
       {XS.map((x0, i) => {
         const x = x0 + (i === 0 ? 1 : -1) * 34 * squeeze + jolt * (i === 0 ? 1 : -1);
         const pc = overshoot(ramp(f, hitPc - 2 + i * 3, 14, EASE.linear));
@@ -90,6 +92,7 @@ export const DeskClutter: React.FC<{f: number}> = ({f}) => {
       })}
       <line x1={540 - 470 * desk} y1={KEYS_Y + 80} x2={540 + 470 * desk} y2={KEYS_Y + 80} stroke={C.emeraldLight}
         strokeWidth={4} strokeLinecap="round" opacity={desk} style={{filter: `drop-shadow(0 0 ${(12 * tense).toFixed(1)}px ${C.emerald})`}} />
+      </g>
     </svg>
   );
 };

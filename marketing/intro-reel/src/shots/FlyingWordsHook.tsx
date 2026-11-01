@@ -102,7 +102,7 @@ export const FlyingWordsHook: React.FC = () => {
         const vx = p.sx - q.sx, vy = p.sy - q.sy;
         // keep the foreground (desk picture + hook text, y ~260–1260) readable
         const k = ((p.sx - CX) / 560) ** 2 + ((p.sy - FG_Y) / 600) ** 2;
-        const occl = k < 1 ? 0.2 + 0.8 * k * k : 1;
+        const occl = k < 1 ? 0.1 + 0.9 * k * k * k : 1;
         const op = curve(u) * occl;
         if (op <= 0.005) return null;
         const blur = (u < 0.22 ? (1 - u / 0.22) * 2.2 : 0) + (u > 0.86 ? (u - 0.86) * 60 : 0);
@@ -133,16 +133,17 @@ export const FlyingWordsHook: React.FC = () => {
           background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#020304', 0.9)} 0%, ${alpha('#020304', 0.55)} 50%, transparent 74%)`,
         }} />
         <DeskClutter f={f} />
-        <div style={{position: 'absolute', left: 0, right: 0, top: 800, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
+        <div style={{position: 'absolute', left: 0, right: 0, top: 960, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
           {HOOK.map((h, i) => {
             const e = ramp(f, h.at - 1, 9, EASE.snappy);
             return (
               <div key={i} style={{
-                fontFamily: SANS, fontWeight: 800, fontSize: h.accent ? 116 : 96, letterSpacing: '-0.045em', lineHeight: 1.08,
-                color: h.accent ? C.emeraldLight : C.ink, marginTop: h.accent ? 26 : 0,
+                // quieter than the picture above it: smaller, lighter, dimmed
+                fontFamily: SANS, fontWeight: h.accent ? 700 : 600, fontSize: h.accent ? 80 : 62, letterSpacing: '-0.035em', lineHeight: 1.12,
+                color: h.accent ? C.emeraldLight : alpha(C.ink, 0.62), marginTop: h.accent ? 18 : 0,
                 opacity: Math.min(1, e * 2), transform: `translateY(${((1 - e) * 34).toFixed(1)}px) scale(${mix(1.18, 1, e).toFixed(4)})`,
                 filter: e < 0.98 ? `blur(${((1 - e) * 10).toFixed(1)}px)` : undefined,
-                textShadow: h.accent ? `0 0 40px ${alpha(C.emerald, 0.45)}` : `0 4px 40px ${alpha('#000', 0.6)}`,
+                textShadow: h.accent ? `0 0 30px ${alpha(C.emerald, 0.35)}` : undefined,
               }}>
                 {h.text}
               </div>
