@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include "ScreenSetupView.h"
+#include "ComputerSetupView.h"
 
-#include "ScreenSetupModel.h"
-#include "dialogs/ScreenSettingsDialog.h"
+#include "ComputerSetupModel.h"
+#include "dialogs/ComputerSettingsDialog.h"
 
 #include <QDrag>
 #include <QDragEnterEvent>
@@ -19,7 +19,7 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 
-ScreenSetupView::ScreenSetupView(QWidget *parent) : QTableView(parent)
+ComputerSetupView::ComputerSetupView(QWidget *parent) : QTableView(parent)
 {
   setDropIndicatorShown(true);
   setDragDropMode(DragDrop);
@@ -33,25 +33,25 @@ ScreenSetupView::ScreenSetupView(QWidget *parent) : QTableView(parent)
   verticalHeader()->hide();
 }
 
-void ScreenSetupView::setModel(QAbstractItemModel *model)
+void ComputerSetupView::setModel(QAbstractItemModel *model)
 {
   QTableView::setModel(model);
   setTableSize();
 }
 
-ScreenSetupModel *ScreenSetupView::model() const
+ComputerSetupModel *ComputerSetupView::model() const
 {
-  return qobject_cast<ScreenSetupModel *>(QTableView::model());
+  return qobject_cast<ComputerSetupModel *>(QTableView::model());
 }
 
-void ScreenSetupView::showScreenConfig(int col, int row)
+void ComputerSetupView::showComputerConfig(int col, int row)
 {
-  ScreenSettingsDialog dlg(this, &model()->screen(col, row), &model()->m_Screens);
+  ComputerSettingsDialog dlg(this, &model()->computer(col, row), &model()->m_computers);
   dlg.exec();
-  Q_EMIT model()->screensChanged();
+  Q_EMIT model()->computersChanged();
 }
 
-void ScreenSetupView::setTableSize()
+void ComputerSetupView::setTableSize()
 {
   for (int i = 0; i < model()->columnCount(); i++)
     setColumnWidth(i, width() / model()->columnCount());
@@ -60,38 +60,38 @@ void ScreenSetupView::setTableSize()
     setRowHeight(i, height() / model()->rowCount());
 }
 
-void ScreenSetupView::resizeEvent(QResizeEvent *event)
+void ComputerSetupView::resizeEvent(QResizeEvent *event)
 {
   setTableSize();
   event->ignore();
 }
 
-void ScreenSetupView::mouseDoubleClickEvent(QMouseEvent *event)
+void ComputerSetupView::mouseDoubleClickEvent(QMouseEvent *event)
 {
   if (event->buttons() & Qt::LeftButton) {
     int col = columnAt(event->pos().x());
     int row = rowAt(event->pos().y());
 
-    if (!model()->screen(col, row).isNull()) {
-      showScreenConfig(col, row);
+    if (!model()->computer(col, row).isNull()) {
+      showComputerConfig(col, row);
     }
   } else
     event->ignore();
 }
 
-void ScreenSetupView::dragEnterEvent(QDragEnterEvent *event)
+void ComputerSetupView::dragEnterEvent(QDragEnterEvent *event)
 {
   // we accept anything that enters us by a drag as long as the
   // mime type is okay. anything else is dealt with in dragMoveEvent()
-  if (event->mimeData()->hasFormat(ScreenSetupModel::mimeType()))
+  if (event->mimeData()->hasFormat(ComputerSetupModel::mimeType()))
     event->accept();
   else
     event->ignore();
 }
 
-void ScreenSetupView::dragMoveEvent(QDragMoveEvent *event)
+void ComputerSetupView::dragMoveEvent(QDragMoveEvent *event)
 {
-  if (event->mimeData()->hasFormat(ScreenSetupModel::mimeType())) {
+  if (event->mimeData()->hasFormat(ComputerSetupModel::mimeType())) {
     // where does the event come from? myself or someone else?
     if (event->source() == this) {
       // myself is ok, but then it must be a move action, never a copy
@@ -102,8 +102,8 @@ void ScreenSetupView::dragMoveEvent(QDragMoveEvent *event)
       int col = columnAt(point.x());
       int row = rowAt(point.y());
 
-      // a drop from outside is not allowed if there's a screen already there.
-      if (!model()->screen(col, row).isNull())
+      // a drop from outside is not allowed if there's a computer already there.
+      if (!model()->computer(col, row).isNull())
         event->ignore();
       else {
         event->acceptProposedAction();
@@ -114,7 +114,7 @@ void ScreenSetupView::dragMoveEvent(QDragMoveEvent *event)
 }
 
 // this is reimplemented from QAbstractItemView::startDrag()
-void ScreenSetupView::startDrag(Qt::DropActions)
+void ComputerSetupView::startDrag(Qt::DropActions)
 {
   QModelIndexList indexes = selectedIndexes();
 
@@ -125,7 +125,7 @@ void ScreenSetupView::startDrag(Qt::DropActions)
   if (pData == nullptr)
     return;
 
-  const QPixmap &pixmap = model()->screen(indexes[0]).pixmap();
+  const QPixmap &pixmap = model()->computer(indexes[0]).pixmap();
   auto *pDrag = new QDrag(this);
   pDrag->setPixmap(pixmap);
   pDrag->setMimeData(pData);
@@ -134,18 +134,18 @@ void ScreenSetupView::startDrag(Qt::DropActions)
   if (pDrag->exec(Qt::MoveAction, Qt::MoveAction) == Qt::MoveAction) {
     selectionModel()->clear();
 
-    // make sure to only delete the drag source if screens weren't swapped
-    // see ScreenSetupModel::dropMimeData
-    if (!model()->screen(indexes[0]).swapped())
-      model()->screen(indexes[0]) = Screen();
+    // make sure to only delete the drag source if computerss weren't swapped
+    // see ComputerSetupModel::dropMimeData
+    if (!model()->computer(indexes[0]).swapped())
+      model()->computer(indexes[0]) = Computer();
     else
-      model()->screen(indexes[0]).setSwapped(false);
+      model()->computer(indexes[0]).setSwapped(false);
 
-    Q_EMIT model()->screensChanged();
+    Q_EMIT model()->computersChanged();
   }
 }
 
-void ScreenSetupView::initViewItemOption(QStyleOptionViewItem *option) const
+void ComputerSetupView::initViewItemOption(QStyleOptionViewItem *option) const
 {
   // initFrom takes palette, font and direction defaults from a plain widget
   QWidget defaults;

@@ -12,20 +12,20 @@
 #include <QString>
 #include <QStringList>
 
-#include "gui/config/ScreenList.h"
+#include "gui/config/ComputerList.h"
 
-class ScreenSetupView;
+class ComputerSetupView;
 class ServerConfigDialog;
 
-class ScreenSetupModel : public QAbstractTableModel
+class ComputerSetupModel : public QAbstractTableModel
 {
   Q_OBJECT
 
-  friend class ScreenSetupView;
+  friend class ComputerSetupView;
   friend class ServerConfigDialog;
 
 public:
-  ScreenSetupModel(ScreenList &screens, int numColumns, int numRows);
+  ComputerSetupModel(ComputerList &screens, int numColumns, int numRows);
 
   static const QString &mimeType()
   {
@@ -55,33 +55,33 @@ public:
   bool isFull() const;
 
 Q_SIGNALS:
-  void screensChanged();
+  void computersChanged();
 
 protected:
   bool
   dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent) override;
-  const Screen &screen(const QModelIndex &index) const
+  const Computer &computer(const QModelIndex &index) const
   {
-    return screen(index.column(), index.row());
+    return computer(index.column(), index.row());
   }
-  Screen &screen(const QModelIndex &index)
+  Computer &computer(const QModelIndex &index)
   {
-    return screen(index.column(), index.row());
+    return computer(index.column(), index.row());
   }
-  const Screen &screen(int column, int row) const
+  const Computer &computer(int column, int row) const
   {
-    return m_Screens[row * m_NumColumns + column];
+    return m_computers[row * m_NumColumns + column];
   }
-  Screen &screen(int column, int row)
+  Computer &computer(int column, int row)
   {
-    return m_Screens[row * m_NumColumns + column];
+    return m_computers[row * m_NumColumns + column];
   }
-  void addScreen(const Screen &newScreen);
+  void addComputer(const Computer &newComputer);
 
 private:
   static constexpr int kMaxGridSize = 100;
 
-  ScreenList &m_Screens;
+  ComputerList &m_computers;
   int m_NumColumns;
   int m_NumRows;
 

@@ -8,7 +8,7 @@
 
 #include "Pairing.h"
 
-#include "gui/config/ScreenList.h"
+#include "gui/config/ComputerList.h"
 
 #include <QList>
 
@@ -28,12 +28,12 @@ class ClientScreenQueue
 {
 public:
   //! True when the layout has a screen or an alias of this name. The core does not tell names apart by case.
-  static bool inLayout(const ScreenList &layout, const QString &screenName)
+  static bool inLayout(const ComputerList &layout, const QString &screenName)
   {
     const auto isName = [&screenName](const QString &name) {
       return name.compare(screenName, Qt::CaseInsensitive) == 0;
     };
-    return std::ranges::any_of(layout, [&isName](const Screen &screen) {
+    return std::ranges::any_of(layout, [&isName](const Computer &screen) {
       return isName(screen.name()) || std::ranges::any_of(screen.aliases(), isName);
     });
   }
@@ -57,7 +57,7 @@ public:
   }
 
   //! The editing ended: once the last one has, the computers kept meanwhile that the layout lacks, oldest first
-  QList<PeerIdentity> close(const ScreenList &layout)
+  QList<PeerIdentity> close(const ComputerList &layout)
   {
     if (m_open == 0 || --m_open > 0)
       return {};

@@ -393,11 +393,11 @@ void ServerConfigTests::read_invalid_data()
   QTest::newRow("unterminated options") << "section: options\n" << "unexpected end of options section";
   QTest::newRow("unterminated screens") << "section: screens\n" << "unexpected end of screens section";
   QTest::newRow("unterminated aliases") << "section: aliases\n" << "unexpected end of aliases section";
-  QTest::newRow("link before screen") << "section: links\n right = beta\nend" << "argument before first screen";
-  QTest::newRow("unknown source") << "section: links\n nobody:\nend" << "unknown screen name \"nobody\"";
-  QTest::newRow("alias source") << "section: links\n b1:\nend" << "cannot use screen name alias here";
+  QTest::newRow("link before screen") << "section: links\n right = beta\nend" << "argument before first computer";
+  QTest::newRow("unknown source") << "section: links\n nobody:\nend" << "unknown computer name \"nobody\"";
+  QTest::newRow("alias source") << "section: links\n b1:\nend" << "cannot use computer name alias here";
   QTest::newRow("unknown side") << links("  sideways = beta") << "line 3: unknown side \"sideways\" in link";
-  QTest::newRow("unknown destination") << links("  right = nobody") << "unknown screen name \"nobody\"";
+  QTest::newRow("unknown destination") << links("  right = nobody") << "unknown computer name \"nobody\"";
   QTest::newRow("missing =") << links("  right beta") << "expected =";
   QTest::newRow("missing )") << links("  right(0,50 = beta") << "missing )";
   QTest::newRow("reversed interval") << links("  right(50,10) = beta") << "invalid interval \"(50,10)\"";
@@ -423,7 +423,7 @@ void ServerConfigTests::read_invalid_data()
   QTest::newRow("broadcast mode") << options(" keystroke(a) = keyboardBroadcast(maybe)")
                                   << "syntax for action: keyboardBroadcast";
   QTest::newRow("broadcast screen") << options(" keystroke(a) = keyboardBroadcast(on,nobody)")
-                                    << "unknown screen name \"nobody\"";
+                                    << "unknown computer name \"nobody\"";
   QTest::newRow("mouse button zero") << options(" keystroke(a) = mouseDown(0)") << "invalid button";
   QTest::newRow("mouse button text") << options(" keystroke(a) = mouseDown(x)") << "unable to parse button";
   QTest::newRow("mouse arity") << options(" keystroke(a) = mousebutton(1,2)") << "syntax for action: mousebutton";

@@ -5,28 +5,28 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include "TrashScreenWidget.h"
+#include "RemoveComputerWidget.h"
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
 
-#include "ScreenSetupModel.h"
+#include "ComputerSetupModel.h"
 
-void TrashScreenWidget::dragEnterEvent(QDragEnterEvent *event)
+void RemoveComputerWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-  if (event->mimeData()->hasFormat(ScreenSetupModel::mimeType())) {
+  if (event->mimeData()->hasFormat(ComputerSetupModel::mimeType())) {
     event->setDropAction(Qt::MoveAction);
     event->accept();
   } else
     event->ignore();
 }
 
-void TrashScreenWidget::dropEvent(QDropEvent *event)
+void RemoveComputerWidget::dropEvent(QDropEvent *event)
 {
-  if (event->mimeData()->hasFormat(ScreenSetupModel::mimeType())) {
+  if (event->mimeData()->hasFormat(ComputerSetupModel::mimeType())) {
     event->acceptProposedAction();
-    Q_EMIT screenRemoved();
+    Q_EMIT computerRemoved();
   } else {
     event->ignore();
   }

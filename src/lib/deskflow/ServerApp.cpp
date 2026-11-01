@@ -61,28 +61,28 @@ ServerOptions serverOptionsFromSettings()
 {
   const auto value = [](const QString &key) { return Settings::value(key); };
   ServerOptions options;
-  for (const auto &name : Settings::knownScreens()) {
+  for (const auto &name : Settings::knownComputers()) {
     ServerOptions::Screen screen;
     screen.name = name.toStdString();
-    for (const auto &alias : value(Settings::Screen::Aliases.arg(name)).toStringList()) {
+    for (const auto &alias : value(Settings::Computer::Aliases.arg(name)).toStringList()) {
       screen.aliases.push_back(alias.toStdString());
     }
-    screen.halfDuplexCapsLock = value(Settings::Screen::HalfDuplexCapsLock.arg(name)).toBool();
-    screen.halfDuplexNumLock = value(Settings::Screen::HalfDuplexNumLock.arg(name)).toBool();
-    screen.halfDuplexScrollLock = value(Settings::Screen::HalfDuplexScrollLock.arg(name)).toBool();
-    screen.xtestXineramaUnaware = value(Settings::Screen::XtestIsXineramaUnaware.arg(name)).toBool();
-    screen.weakX11Focus = value(Settings::Screen::WeakX11Focus.arg(name)).toBool();
-    screen.switchCornerSize = value(Settings::Screen::SwitchCornerSize.arg(name)).toInt();
-    screen.switchCornerTopLeft = value(Settings::Screen::SwitchCornerTopLeft.arg(name)).toBool();
-    screen.switchCornerTopRight = value(Settings::Screen::SwitchCornerTopRight.arg(name)).toBool();
-    screen.switchCornerBottomLeft = value(Settings::Screen::SwitchCornerBottomLeft.arg(name)).toBool();
-    screen.switchCornerBottomRight = value(Settings::Screen::SwitchCornerBottomRight.arg(name)).toBool();
-    screen.modifierAlt = value(Settings::Screen::ModifierAlt.arg(name)).toString().toStdString();
-    screen.modifierAltGr = value(Settings::Screen::ModifierAltGr.arg(name)).toString().toStdString();
-    screen.modifierCtrl = value(Settings::Screen::ModifierCtrl.arg(name)).toString().toStdString();
-    screen.modifierMeta = value(Settings::Screen::ModifierMeta.arg(name)).toString().toStdString();
-    screen.modifierShift = value(Settings::Screen::ModifierShift.arg(name)).toString().toStdString();
-    screen.modifierSuper = value(Settings::Screen::ModifierSuper.arg(name)).toString().toStdString();
+    screen.halfDuplexCapsLock = value(Settings::Computer::HalfDuplexCapsLock.arg(name)).toBool();
+    screen.halfDuplexNumLock = value(Settings::Computer::HalfDuplexNumLock.arg(name)).toBool();
+    screen.halfDuplexScrollLock = value(Settings::Computer::HalfDuplexScrollLock.arg(name)).toBool();
+    screen.xtestXineramaUnaware = value(Settings::Computer::XtestIsXineramaUnaware.arg(name)).toBool();
+    screen.weakX11Focus = value(Settings::Computer::WeakX11Focus.arg(name)).toBool();
+    screen.switchCornerSize = value(Settings::Computer::SwitchCornerSize.arg(name)).toInt();
+    screen.switchCornerTopLeft = value(Settings::Computer::SwitchCornerTopLeft.arg(name)).toBool();
+    screen.switchCornerTopRight = value(Settings::Computer::SwitchCornerTopRight.arg(name)).toBool();
+    screen.switchCornerBottomLeft = value(Settings::Computer::SwitchCornerBottomLeft.arg(name)).toBool();
+    screen.switchCornerBottomRight = value(Settings::Computer::SwitchCornerBottomRight.arg(name)).toBool();
+    screen.modifierAlt = value(Settings::Computer::ModifierAlt.arg(name)).toString().toStdString();
+    screen.modifierAltGr = value(Settings::Computer::ModifierAltGr.arg(name)).toString().toStdString();
+    screen.modifierCtrl = value(Settings::Computer::ModifierCtrl.arg(name)).toString().toStdString();
+    screen.modifierMeta = value(Settings::Computer::ModifierMeta.arg(name)).toString().toStdString();
+    screen.modifierShift = value(Settings::Computer::ModifierShift.arg(name)).toString().toStdString();
+    screen.modifierSuper = value(Settings::Computer::ModifierSuper.arg(name)).toString().toStdString();
     options.screens.push_back(std::move(screen));
   }
 
@@ -370,14 +370,14 @@ deskflow::Screen *ServerApp::createScreen()
 #else
   if (deskflow::platform::isWayland()) {
 #if WINAPI_LIBEI
-    LOG_INFO("using ei screen for wayland");
+    LOG_INFO("detected wayland platform");
     return new deskflow::Screen(new deskflow::EiScreen(true, getEvents(), true), getEvents());
 #else
     throw XNoEiSupport();
 #endif
   }
 #if WINAPI_XWINDOWS
-  LOG_INFO("using legacy x windows screen");
+  LOG_INFO("detected X11 platform");
   return new deskflow::Screen(
       new XWindowsScreen(qPrintable(Settings::value(Settings::Core::Display).toString()), true, getEvents()),
       getEvents()
@@ -493,7 +493,7 @@ int ServerApp::mainLoop()
 
   // canonicalize the primary screen name
   if (std::string primaryName = m_config->getCanonicalName(m_name); primaryName.empty()) {
-    LOG_CRIT("unknown screen name `%s'", m_name.c_str());
+    LOG_CRIT("unknown computer name `%s'", m_name.c_str());
     return s_exitFailed;
   }
 

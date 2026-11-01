@@ -14,19 +14,19 @@ class QWidget;
 class QMouseEvent;
 class QResizeEvent;
 class QDragEnterEvent;
-class ScreenSetupModel;
+class ComputerSetupModel;
 
-class ScreenSetupView : public QTableView
+class ComputerSetupView : public QTableView
 {
   Q_OBJECT
 
 public:
-  explicit ScreenSetupView(QWidget *parent);
+  explicit ComputerSetupView(QWidget *parent);
   void setModel(QAbstractItemModel *model) override;
-  ScreenSetupModel *model() const;
+  ComputerSetupModel *model() const;
 
 private:
-  void showScreenConfig(int col, int row);
+  void showComputerConfig(int col, int row);
 
 protected:
   void mouseDoubleClickEvent(QMouseEvent *) override;

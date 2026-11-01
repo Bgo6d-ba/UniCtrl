@@ -719,7 +719,7 @@ void MainWindow::addClientScreen(const lan::PeerIdentity &client)
 // True when the layout changed
 bool MainWindow::placeClientScreen(const lan::PeerIdentity &client)
 {
-  const auto &screens = std::as_const(m_serverConfig).screens();
+  const auto &screens = std::as_const(m_serverConfig).computers();
   if (lan::ClientScreenQueue::inLayout(screens, client.screenName))
     return false;
 
@@ -736,8 +736,8 @@ bool MainWindow::placeClientScreen(const lan::PeerIdentity &client)
   for (const auto &screen : screens) {
     if (screen.isNull())
       continue;
-    Settings::setValue(Settings::Screen::Aliases.arg(screen.name()), screen.aliases());
-    Settings::setValue(Settings::Screen::Name.arg(screen.name()), screen.name());
+    Settings::setValue(Settings::Computer::Aliases.arg(screen.name()), screen.aliases());
+    Settings::setValue(Settings::Computer::Name.arg(screen.name()), screen.name());
   }
   Settings::save();
   return true;
@@ -753,7 +753,7 @@ bool MainWindow::execServerConfigDialog(ServerConfigDialog &dialog)
   m_serverConfigDialogVisible = false;
 
   bool changed = accepted;
-  for (const auto &client : m_clientScreens.close(std::as_const(m_serverConfig).screens()))
+  for (const auto &client : m_clientScreens.close(std::as_const(m_serverConfig).computers()))
     changed = placeClientScreen(client) || changed;
   if (changed && m_coreProcess.isStarted())
     m_coreProcess.restart();
@@ -911,7 +911,7 @@ void MainWindow::handleUnrecognisedClient(const QString &clientName)
   if (Settings::value(Settings::Server::ExternalConfig).toBool())
     return;
 
-  if (m_serverConfig.isFull() || m_serverConfig.screenExists(clientName))
+  if (m_serverConfig.isFull() || m_serverConfig.computerExists(clientName))
     return;
 
   m_newClientPromptShowing = true;
@@ -1278,25 +1278,25 @@ void MainWindow::setHostName()
   toggleCanRunCore(canRunCore());
 
   QString text = ui->lineEditName->text();
-  const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
+  const auto computerName = Settings::value(Settings::Core::ComputerName).toString();
 
-  if (text == screenName)
+  if (text == computerName)
     return;
 
   const bool isServer = ui->rbModeServer->isChecked();
-  bool existingScreen = false;
+  bool existingComputer = false;
   if (isServer)
-    existingScreen = serverConfig().screenExists(text);
+    existingComputer = serverConfig().computerExists(text);
 
-  if (!ui->lineEditName->hasAcceptableInput() || text.isEmpty() || existingScreen) {
+  if (!ui->lineEditName->hasAcceptableInput() || text.isEmpty() || existingComputer) {
     blockSignals(true);
-    ui->lineEditName->setText(screenName);
+    ui->lineEditName->setText(computerName);
     blockSignals(false);
 
-    const auto title = tr("Invalid Screen Name");
+    const auto title = tr("Invalid Computer Name");
     QString body;
-    if (existingScreen) {
-      body = tr("Screen name already exists");
+    if (existingComputer) {
+      body = tr("Computer name already exists");
     } else {
       body =
           tr("The name you have chosen is invalid.\n\n"

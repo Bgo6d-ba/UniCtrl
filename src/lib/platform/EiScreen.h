@@ -1,5 +1,6 @@
 /*
  * Deskflow -- mouse and keyboard sharing utility
+ * SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
  * SPDX-FileCopyrightText: (C) 2024, 2026 Synergy App Ltd
  * SPDX-FileCopyrightText: (C) 2022, 2026 Red Hat, Inc.
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
@@ -7,7 +8,7 @@
 
 #pragma once
 
-#include "deskflow/IScreen.h"
+#include "deskflow/IComputer.h"
 #include "deskflow/PlatformScreen.h"
 #ifdef HAVE_LIBPORTAL_SHORTCUTS
 #include "platform/PortalGlobalShortcuts.h"
@@ -38,16 +39,18 @@ class PortalInputCapture;
 class PortalGlobalShortcuts;
 class EiClipboard;
 
-using ClipboardInfo = IScreen::ClipboardInfo;
+using ClipboardInfo = IComputer::ClipboardInfo;
 
 //! Implementation of IPlatformScreen for X11
 class EiScreen : public PlatformScreen
 {
+  friend class EiHotKeyModifierMatchingTests;
+
 public:
   EiScreen(bool isPrimary, IEventQueue *events, bool usePortal);
   ~EiScreen() override;
 
-  // IScreen overrides
+  // IComputer overrides
   void *getEventTarget() const final;
   bool getClipboard(ClipboardID id, IClipboard *) const override;
   void getShape(std::int32_t &x, std::int32_t &y, std::int32_t &width, std::int32_t &height) const override;

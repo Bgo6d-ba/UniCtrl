@@ -167,7 +167,7 @@ void App::initApp()
 
 void App::handleScreenError() const
 {
-  LOG_CRIT("error on screen");
+  LOG_CRIT("error on computer");
   getEvents()->addEvent(Event(EventTypes::Quit));
 }
 
@@ -179,7 +179,7 @@ void App::runScreenCommand(bool entered)
 
   const auto name = entered ? "enter" : "exit";
   const auto commandLine =
-      Settings::value(entered ? Settings::Core::ScreenEnterCommand : Settings::Core::ScreenExitCommand).toString();
+      Settings::value(entered ? Settings::Core::ComputerEnterCommand : Settings::Core::ComputerExitCommand).toString();
   LOG_DEBUG("running screen %s command: %s", name, qPrintable(commandLine));
 
   bool started = false;

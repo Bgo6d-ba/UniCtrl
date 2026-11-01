@@ -48,17 +48,17 @@ Screen::~Screen()
   // can still see when it happens but it won't cause the process to pause. This
   // also gives us the added benefit of seeing when it happens in production.
   // Perhaps it indicates that the cursor is still being controlled on the
-  // client while it's shutting down? i.e. the screen is entered and is not the
-  // server, or the screen is not entered and is the server.
+  // client while it's shutting down? i.e. the computer is entered and is not the
+  // server, or the computer is not entered and is the server.
   if (m_entered != m_isPrimary) {
     LOG_DEBUG(
         "current screen: entered=%s, primary=%s", //
         m_entered ? "yes" : "no", m_isPrimary ? "yes" : "no"
     );
     if (m_isPrimary) {
-      LOG_WARN("current primary screen is not entered on shutdown");
+      LOG_WARN("current primary computer is not entered on shutdown");
     } else {
-      LOG_WARN("current secondary screen is entered on shutdown");
+      LOG_WARN("current secondary computer is entered on shutdown");
     }
   }
 
@@ -105,10 +105,10 @@ void Screen::disable()
 
 void Screen::enter(KeyModifierMask toggleMask)
 {
-  LOG_INFO("entering screen");
+  LOG_INFO("entering computer");
 
   if (m_entered) {
-    LOG_WARN("screen already entered");
+    LOG_WARN("computer already entered");
   }
 
   // now on screen
@@ -127,10 +127,10 @@ void Screen::enter(KeyModifierMask toggleMask)
 
 bool Screen::leave()
 {
-  LOG_INFO("leaving screen");
+  LOG_INFO("leaving computer");
 
   if (!m_entered) {
-    LOG_WARN("screen already left");
+    LOG_WARN("computer already left");
   }
 
   if (!m_screen->canLeave()) {

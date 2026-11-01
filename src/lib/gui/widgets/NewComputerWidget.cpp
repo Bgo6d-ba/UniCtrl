@@ -6,30 +6,30 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
-#include "NewScreenWidget.h"
-#include "ScreenSetupModel.h"
+#include "NewComputerWidget.h"
+#include "ComputerSetupModel.h"
 
 #include <QDrag>
 #include <QLabel>
 #include <QMimeData>
 #include <QMouseEvent>
 
-NewScreenWidget::NewScreenWidget(QWidget *parent) : QLabel(parent)
+NewComputerWidget::NewComputerWidget(QWidget *parent) : QLabel(parent)
 {
   // do nothing
 }
 
-void NewScreenWidget::mousePressEvent(QMouseEvent *)
+void NewComputerWidget::mousePressEvent(QMouseEvent *)
 {
   //: Used as the hostname. Translation may not contain spaces
-  Screen newScreen(tr("Unnamed"));
+  Computer newComputer(tr("Unnamed"));
 
   QByteArray itemData;
   QDataStream dataStream(&itemData, QIODevice::WriteOnly);
-  dataStream << -1 << -1 << newScreen;
+  dataStream << -1 << -1 << newComputer;
 
   auto *pMimeData = new QMimeData;
-  pMimeData->setData(ScreenSetupModel::mimeType(), itemData);
+  pMimeData->setData(ComputerSetupModel::mimeType(), itemData);
 
   auto *pDrag = new QDrag(this);
   pDrag->setMimeData(pMimeData);

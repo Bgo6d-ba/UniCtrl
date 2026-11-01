@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "ScreenConfig.h"
+#include "ComputerConfig.h"
 
 #include "common/KeyboardModifier.h"
 #include "common/QSettingsProxy.h"
@@ -21,28 +21,28 @@
 
 class QSettings;
 class QTextStream;
-class ScreenSettingsDialog;
+class ComputerSettingsDialog;
 
-class Screen : public ScreenConfig
+class Computer : public ComputerConfig
 {
-  friend class ScreenSettingsDialog;
-  friend class ScreenSetupModel;
-  friend class ScreenSetupView;
+  friend class ComputerSettingsDialog;
+  friend class ComputerSetupModel;
+  friend class ComputerSetupView;
 
-  friend QDataStream &operator<<(QDataStream &outStream, const Screen &screen)
+  friend QDataStream &operator<<(QDataStream &outStream, const Computer &screen)
   {
     return outStream << screen.name() << screen.switchCornerSize() << screen.aliases() << screen.modifiers()
                      << screen.switchCorners() << screen.fixes() << screen.isServer();
   }
 
-  friend QDataStream &operator>>(QDataStream &inStream, Screen &screen)
+  friend QDataStream &operator>>(QDataStream &inStream, Computer &screen)
   {
     return inStream >> screen.m_Name >> screen.m_SwitchCornerSize >> screen.m_Aliases >> screen.m_Modifiers >>
            screen.m_SwitchCorners >> screen.m_Fixes >> screen.m_isServer;
   }
 
 public:
-  explicit Screen(const QString &name = QString());
+  explicit Computer(const QString &name = QString());
 
   [[nodiscard]] const QPixmap &pixmap() const
   {
@@ -113,7 +113,7 @@ public:
     m_isServer = true;
   }
 
-  bool operator==(const Screen &screen) const;
+  bool operator==(const Computer &screen) const;
 
 protected:
   QStringList &aliases()

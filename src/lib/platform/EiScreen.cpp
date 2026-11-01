@@ -13,7 +13,7 @@
 #include "base/Log.h"
 #include "common/Constants.h"
 #include "common/Settings.h"
-#include "deskflow/IScreen.h"
+#include "deskflow/IComputer.h"
 #include "deskflow/OptionTypes.h"
 #include "platform/EiClipboard.h"
 #include "platform/EiEventQueueBuffer.h"
@@ -966,7 +966,7 @@ void EiScreen::handlePortalSessionClosed()
 {
   // Portal may or may not EI_EVENT_DISCONNECT us before sending the DBus Closed
   // signal. Let's clean up either way.
-  LOG_DEBUG("eis screen handling portal session closed");
+  LOG_DEBUG("eis handling portal session closed");
   cleanupEi();
   initEi();
 }
@@ -1147,6 +1147,8 @@ void EiScreen::HotKeySet::addItem(HotKeyItem item)
 
 std::uint32_t EiScreen::HotKeySet::findByMask(std::uint32_t mask) const
 {
+  mask &= ~(KeyModifierCapsLock | KeyModifierNumLock | KeyModifierScrollLock);
+
   for (const auto &item : m_set) {
     if (item.mask == mask) {
       return item.id;

@@ -182,7 +182,7 @@ void SettingsTests::checkLanSettingsKept()
     Settings::setValue(Settings::Lan::HostingEnabled, QStringLiteral("true"));
 
     // The server config dialog removes unknown groups, loading a file removes unknown keys
-    Settings::removeUnknownScreens({});
+    Settings::removeUnknownComputers({});
     Settings::setSettingsFile(otherFile);
     Settings::setSettingsFile(m_settingsFile);
 
@@ -210,7 +210,7 @@ void SettingsTests::concurrentAccess()
   std::atomic_bool stop = false;
 
   QList<QThread *> threads;
-  for (const auto &key : {Settings::Core::ScreenEnterCommand, Settings::Core::ScreenExitCommand}) {
+  for (const auto &key : {Settings::Core::ComputerEnterCommand, Settings::Core::ComputerExitCommand}) {
     threads.append(QThread::create([&stop, key] {
       for (int i = 0; !stop; ++i) {
         Settings::setValue(key, QString::number(i));

@@ -110,7 +110,7 @@ OSXScreen::OSXScreen(IEventQueue *events, bool isPrimary, bool enableLangSync)
 {
   m_displayID = CGMainDisplayID();
   if (!updateScreenShape(m_displayID, 0)) {
-    throw DisplayInvalidException("failed to initialize screen shape");
+    throw DisplayInvalidException("failed to initialize computer shape");
   }
 
   try {
@@ -610,10 +610,8 @@ void OSXScreen::fakeMouseRelativeMove(int32_t dx, int32_t dy) const
 void OSXScreen::fakeMouseWheel(ScrollDelta delta) const
 {
   if (delta.x != 0 || delta.y != 0) {
-    // use server's acceleration with a little boost since other platforms
-    // take one wheel step as a larger step than the mac does.
     delta = applyScrollModifier(
-        {static_cast<int32_t>(3.0 * delta.x / s_scrollDelta), static_cast<int32_t>(3.0 * delta.y / s_scrollDelta)}
+        {static_cast<int32_t>(delta.x / s_scrollDelta), static_cast<int32_t>(delta.y / s_scrollDelta)}
     );
     // create a scroll event, post it and release it.  not sure if kCGScrollEventUnitLine
     // is the right choice here over kCGScrollEventUnitPixel
@@ -1057,9 +1055,9 @@ void OSXScreen::displayReconfigurationCallback(
   LOG_VERBOSE("event: display was reconfigured: %x %x %x", flags, mask, flags & mask);
 
   if (flags & mask) { /* Something actually did change */
-    LOG_VERBOSE("event: screen changed shape; refreshing dimensions");
+    LOG_VERBOSE("event: computer changed shape; refreshing dimensions");
     if (!screen->updateScreenShape(displayID, flags)) {
-      LOG_ERR("failed to update screen shape during display reconfiguration");
+      LOG_ERR("failed to update computer shape during display reconfiguration");
     }
   }
 }
@@ -1336,7 +1334,7 @@ bool OSXScreen::updateScreenShape()
   sendEvent(EventTypes::ScreenShapeChanged);
 
   LOG_DEBUG(
-      "screen shape: center=%d,%d size=%dx%d on %u %s", m_x, m_y, m_w, m_h, displayCount,
+      "computer shape: center=%d,%d size=%dx%d on %u %s", m_x, m_y, m_w, m_h, displayCount,
       (displayCount == 1) ? "display" : "displays"
   );
 
