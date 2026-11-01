@@ -19,6 +19,13 @@ if (WIN32)
   )
 elseif(APPLE)
   create_test(
+    NAME OSXDockSwipeTests
+    DEPENDS platform
+    LIBS base arch
+    SOURCE OSXDockSwipeTests.cpp
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+  )
+  create_test(
     NAME OSXClipboardTests
     DEPENDS platform
     LIBS base arch

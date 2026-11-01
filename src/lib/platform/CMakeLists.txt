@@ -79,6 +79,7 @@ elseif(APPLE)
     OSXClipboardTextConverter.h
     OSXClipboardUTF8Converter.cpp
     OSXClipboardUTF8Converter.h
+    OSXDockSwipe.h
     OSXClipboardUTF16Converter.cpp
     OSXClipboardUTF16Converter.h
     OSXCocoaApp.h
