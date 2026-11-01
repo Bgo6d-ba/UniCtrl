@@ -3,6 +3,7 @@ import React from 'react';
 import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import {C, CX, CY, EASE, SANS, alpha, mix, ramp, rand} from '../theme';
 import {SHOTS, wordAt} from '../timeline';
+import {DeskClutter} from './DeskClutter';
 import {Stage} from './Stage';
 
 const PERIOD = 180; // the tunnel runs 2 cycles per 6 s, as tuned in the demo
@@ -49,6 +50,8 @@ const project = (x: number, y: number, u: number, roll: number, drift = true) =>
   const c = Math.cos(roll), sn = Math.sin(roll);
   return {sx: CX + (x * c - y * sn) * d * s, sy: CY + (x * sn + y * c) * d * s, s};
 };
+
+const FG_Y = 760;
 
 // the spoken hook, one stacked line per beat of the read
 const HOOK = [
@@ -97,7 +100,8 @@ export const FlyingWordsHook: React.FC = () => {
         const p = project(it.x, it.y, u, roll);
         const q = project(it.x, it.y, Math.max(0, u - du), roll);
         const vx = p.sx - q.sx, vy = p.sy - q.sy;
-        const k = ((p.sx - CX) / 480) ** 2 + ((p.sy - CY) / 420) ** 2;
+        // keep the foreground (desk picture + hook text, y ~260–1260) readable
+        const k = ((p.sx - CX) / 560) ** 2 + ((p.sy - FG_Y) / 600) ** 2;
         const occl = k < 1 ? 0.2 + 0.8 * k * k : 1;
         const op = curve(u) * occl;
         if (op <= 0.005) return null;
@@ -125,15 +129,16 @@ export const FlyingWordsHook: React.FC = () => {
 
       <AbsoluteFill style={{transform: `scale(${mix(1, 1.6, out)})`, filter: out > 0.01 ? `blur(${(out * 14).toFixed(1)}px)` : undefined, opacity: 1 - out}}>
         <div style={{
-          position: 'absolute', left: CX - 520, top: CY - 420, width: 1040, height: 840, borderRadius: '50%',
-          background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#020304', 0.9)} 0%, ${alpha('#020304', 0.4)} 50%, transparent 74%)`,
+          position: 'absolute', left: CX - 620, top: FG_Y - 660, width: 1240, height: 1320, borderRadius: '50%',
+          background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${alpha('#020304', 0.9)} 0%, ${alpha('#020304', 0.55)} 50%, transparent 74%)`,
         }} />
-        <div style={{position: 'absolute', left: 0, right: 0, top: CY - 300, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
+        <DeskClutter f={f} />
+        <div style={{position: 'absolute', left: 0, right: 0, top: 800, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
           {HOOK.map((h, i) => {
             const e = ramp(f, h.at - 1, 9, EASE.snappy);
             return (
               <div key={i} style={{
-                fontFamily: SANS, fontWeight: 800, fontSize: h.accent ? 124 : 104, letterSpacing: '-0.045em', lineHeight: 1.08,
+                fontFamily: SANS, fontWeight: 800, fontSize: h.accent ? 116 : 96, letterSpacing: '-0.045em', lineHeight: 1.08,
                 color: h.accent ? C.emeraldLight : C.ink, marginTop: h.accent ? 26 : 0,
                 opacity: Math.min(1, e * 2), transform: `translateY(${((1 - e) * 34).toFixed(1)}px) scale(${mix(1.18, 1, e).toFixed(4)})`,
                 filter: e < 0.98 ? `blur(${((1 - e) * 10).toFixed(1)}px)` : undefined,

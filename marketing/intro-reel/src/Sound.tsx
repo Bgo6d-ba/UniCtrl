@@ -1,11 +1,14 @@
 import React from 'react';
 import {Audio, Sequence, interpolate, staticFile} from 'remotion';
+import {DESK_HITS} from './shots/DeskClutter';
 import {LANDINGS, PANEL} from './shots/IconBounce';
 import {POP} from './shots/OutlineFree';
 import {LINES, SHOTS, TOTAL, VO_AT, lineEnd} from './timeline';
 
 const SFX: {at: number; file: string; volume?: number}[] = [
   {at: 0, file: 'whoosh'},
+  ...DESK_HITS.slice(0, 3).map((at, i) => ({at: at + 6, file: `duk-${i}`, volume: 0.55})),
+  {at: DESK_HITS[3] + 2, file: 'tick'},
   {at: SHOTS.bounce.from - 6, file: 'whoosh', volume: 0.7},
   ...LANDINGS.map((at, i) => ({at, file: `duk-${i}`})),
   {at: PANEL, file: 'ding'},
