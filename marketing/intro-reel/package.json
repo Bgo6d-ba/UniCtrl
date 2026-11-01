@@ -1,0 +1,22 @@
+{
+  "name": "unictrl-intro-reel",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "still": "remotion still src/index.ts IntroReel",
+    "render": "remotion render src/index.ts IntroReel out/unictrl-intro-reel.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --image-format=png --audio-codec=aac",
+    "master": "tools/master.sh out/unictrl-intro-reel.mp4 out/unictrl-intro-reel-master.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.484",
+    "@remotion/google-fonts": "4.0.484",
+    "@remotion/paths": "4.0.484",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.484"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "typescript": "6.0.3"
+  }
+}
