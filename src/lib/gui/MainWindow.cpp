@@ -719,7 +719,7 @@ void MainWindow::addClientScreen(const lan::PeerIdentity &client)
 // True when the layout changed
 bool MainWindow::placeClientScreen(const lan::PeerIdentity &client)
 {
-  const auto &screens = std::as_const(m_serverConfig).screens();
+  const auto &screens = std::as_const(m_serverConfig).computers();
   if (lan::ClientScreenQueue::inLayout(screens, client.screenName))
     return false;
 
@@ -753,7 +753,7 @@ bool MainWindow::execServerConfigDialog(ServerConfigDialog &dialog)
   m_serverConfigDialogVisible = false;
 
   bool changed = accepted;
-  for (const auto &client : m_clientScreens.close(std::as_const(m_serverConfig).screens()))
+  for (const auto &client : m_clientScreens.close(std::as_const(m_serverConfig).computers()))
     changed = placeClientScreen(client) || changed;
   if (changed && m_coreProcess.isStarted())
     m_coreProcess.restart();

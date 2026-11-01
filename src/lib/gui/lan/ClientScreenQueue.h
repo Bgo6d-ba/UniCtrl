@@ -33,7 +33,7 @@ public:
     const auto isName = [&screenName](const QString &name) {
       return name.compare(screenName, Qt::CaseInsensitive) == 0;
     };
-    return std::ranges::any_of(layout, [&isName](const Screen &screen) {
+    return std::ranges::any_of(layout, [&isName](const Computer &screen) {
       return isName(screen.name()) || std::ranges::any_of(screen.aliases(), isName);
     });
   }

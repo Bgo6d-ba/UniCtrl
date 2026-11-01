@@ -4,9 +4,9 @@ Deskflow ships three executables built from the static libraries in `src/lib`:
 
 | Executable | Source | Role |
 |---|---|---|
-| `deskflow` (GUI) | `src/apps/deskflow-gui` | Qt Widgets configuration UI; starts and monitors the core. |
+| `deskflow` (GUI) | `src/apps/unictrl-gui` | Qt Widgets configuration UI; starts and monitors the core. |
 | `unictrl-core` | `src/apps/unictrl-core` | Headless server or client that shares the keyboard and mouse. |
-| `deskflow-daemon` | `src/apps/deskflow-daemon` | Windows service that runs the core in the user's session. |
+| `unictrl-daemon` | `src/apps/unictrl-daemon` | Windows service that runs the core in the user's session. |
 
 ## Library layering
 
@@ -29,8 +29,8 @@ CMake target links exactly the components in the "Depends on" column. The graph 
 | 6 | `app` | `lib/deskflow/App.` `lib/deskflow/ServerApp.` `lib/deskflow/ClientApp.` `lib/deskflow/ipc/` `lib/deskflow/unix/AppUtilUnix.` `lib/deskflow/win32/AppUtilWindows.` | `server` `client` `platform` | Process wiring: create a platform screen, run the server or client, IPC servers. |
 | 6 | `gui` | `lib/gui/` | `net` | Qt Widgets UI, IPC clients. |
 | 7 | `unictrl-core` | `apps/unictrl-core/` | `app` | Executable. |
-| 7 | `deskflow-daemon` | `apps/deskflow-daemon/` | `app` | Executable (Windows). |
-| 7 | `deskflow-gui` | `apps/deskflow-gui/` | `gui` | Executable. |
+| 7 | `unictrl-daemon` | `apps/unictrl-daemon/` | `app` | Executable (Windows). |
+| 7 | `unictrl-gui` | `apps/unictrl-gui/` | `gui` | Executable. |
 <!-- layering:components:end -->
 
 `src/lib/deskflow` builds two targets: `app` takes the files listed in its row (the longest
@@ -60,7 +60,7 @@ Rules:
 test (registered in `src/unittests`, so it runs locally and in CI with the unit tests). It fails when
 a source file under `src/lib` or `src/apps` is in no component, when a file includes
 (`#include`/`#import`, quotes or angle brackets) a header of a component it may not use, when the
-graph has a cycle, when a component has no CMake target (only `deskflow-daemon` may be missing,
+graph has a cycle, when a component has no CMake target (only `unictrl-daemon` may be missing,
 off Windows), when a target's links to other components differ from "Depends on", when a target
 builds a source file that the table gives to another component, or when an exception below is no
 longer needed. A quoted include is resolved against the including file's directory first
@@ -123,7 +123,7 @@ settings the same way; the remaining `Settings::` calls in those layers are to b
   GUI  ─────────────────────────────────────▶  unictrl-core
    │   ◀──── core IPC (QLocalSocket) ─────────┘
    │
-   └──── daemon IPC (named pipe, Windows service mode) ──▶  deskflow-daemon ──▶ unictrl-core
+   └──── daemon IPC (named pipe, Windows service mode) ──▶  unictrl-daemon ──▶ unictrl-core
 ```
 
 - **Transport.** All IPC uses `QLocalServer`/`QLocalSocket` with newline-terminated UTF-8 text

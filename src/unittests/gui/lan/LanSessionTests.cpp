@@ -10,7 +10,7 @@
 
 #include "common/Settings.h"
 #include "gui/TlsUtility.h"
-#include "gui/config/Screen.h"
+#include "gui/config/Computer.h"
 #include "gui/lan/ClientScreenQueue.h"
 #include "gui/lan/LanSession.h"
 #include "net/Fingerprint.h"
@@ -33,7 +33,7 @@ using deskflow::core::ProcessState;
 
 namespace {
 
-struct Computer
+struct Machine
 {
   QString computerName;
   QString displayName;
@@ -44,13 +44,13 @@ struct Computer
 
 // The settings are shared by everything in the process, so a test switches them to the computer that acts. A session
 // reads them when it starts hosting or joining, not later.
-Computer s_host;
-Computer s_joiner;
+Machine s_host;
+Machine s_joiner;
 
 // Where the beacons of sessions that host without a listener go
 QUdpSocket *s_sink = nullptr;
 
-void use(const Computer &computer)
+void use(const Machine &computer)
 {
   Settings::setValue(Settings::Core::ComputerName, computer.computerName);
   Settings::setValue(Settings::Core::DisplayName, computer.displayName);
@@ -77,22 +77,22 @@ CoreMode coreMode()
   return Settings::value(Settings::Core::CoreMode).value<CoreMode>();
 }
 
-Fingerprint fingerprintOf(const Computer &computer)
+Fingerprint fingerprintOf(const Machine &computer)
 {
   return {QCryptographicHash::Sha256, TlsUtility::certFingerprint(computer.certificate)};
 }
 
-QString fingerprintText(const Computer &computer)
+QString fingerprintText(const Machine &computer)
 {
   return QString::fromLatin1(TlsUtility::certFingerprint(computer.certificate).toHex());
 }
 
-bool trustedByJoiner(const Computer &host)
+bool trustedByJoiner(const Machine &host)
 {
   return TlsUtility::isTrusted(Settings::tlsTrustedServersDb(), fingerprintOf(host));
 }
 
-bool trustedByHost(const Computer &joiner)
+bool trustedByHost(const Machine &joiner)
 {
   return TlsUtility::isTrusted(Settings::tlsTrustedClientsDb(), fingerprintOf(joiner));
 }
@@ -524,7 +524,7 @@ void LanSessionTests::hosting_keepsACertificateThatIsInvalid()
 
 void LanSessionTests::hosting_tellsAboutANewCertificate()
 {
-  Computer fresh = s_host;
+  Machine fresh = s_host;
   fresh.certificate = m_dir.filePath(QStringLiteral("tls/fresh.pem"));
   QFile::remove(fresh.certificate);
   use(fresh);
@@ -1396,8 +1396,8 @@ void LanSessionTests::screenQueue_nestsAndSkipsWhatTheLayoutHas()
   QVERIFY(!queue.submit(guest(4)));
 
   // The layout that came out of the dialog has some of them, by name in any case
-  layout.append(Screen(guest(2).screenName.toUpper()));
-  layout.append(Screen(guest(4).screenName));
+  layout.append(::Computer(guest(2).screenName.toUpper()));
+  layout.append(::Computer(guest(4).screenName));
   const auto queued = queue.close(layout);
   QCOMPARE(queued.size(), 2);
   QCOMPARE(queued.at(0).screenName, guest(1).screenName);
