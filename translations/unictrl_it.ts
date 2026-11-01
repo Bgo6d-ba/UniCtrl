@@ -1028,7 +1028,7 @@ Inoltre, verifica di poter %1 il file di configurazione del server: %2</translat
         <translation>%1 - Nuovo Client</translation>
     </message>
     <message>
-        <source>A new client called &apos;%1&apos; has been accepted. You&apos;ll need to add it to your server&apos;s computer layout.</source>
+        <source>A new client called &apos;%1&apos; has been accepted. You&apos;ll need to add it to your server&apos;s screen layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

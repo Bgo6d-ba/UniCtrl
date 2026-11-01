@@ -51,7 +51,7 @@ void IpcClient::connectToServer()
 
 void IpcClient::attemptConnection()
 {
-  if (const int retryLimit = 3; m_retryCount >= retryLimit) {
+  if (const int retryLimit = 10; m_retryCount >= retryLimit) {
     qWarning().noquote() << QStringLiteral("%1 ipc client failed to connect after %2 attempts")
                                 .arg(m_typeName, QString::number(retryLimit));
     m_state = State::Unconnected;
@@ -120,7 +120,7 @@ void IpcClient::handleErrorOccurred()
     ) << QStringLiteral("%1 ipc client failed to connect: %2").arg(m_typeName, m_socket->errorString());
     m_socket->disconnectFromServer();
     m_state = State::Unconnected;
-    QTimer::singleShot(0, this, &IpcClient::attemptConnection);
+    QTimer::singleShot(500, this, &IpcClient::attemptConnection);
     return;
   }
 
